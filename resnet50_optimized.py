@@ -46,32 +46,30 @@ TRAIN_DIR  = '/content/drive/MyDrive/dataset/train'
 TEST_DIR   = '/content/drive/MyDrive/dataset/test'
 OUTPUT_DIR = '/content/drive/MyDrive/dataset'
 
-# ✅ OPTIMASI #1: Ukuran image optimal untuk ResNet50
-IMG_SIZE         = (224, 224)  # Ukuran standar ResNet50
+# ✅ OPTIMASI #1: Konfigurasi model
+IMG_SIZE         = (160, 160)
 BATCH_SIZE       = 16
 EPOCHS           = 20
 VALIDATION_SPLIT = 0.2
 NUM_CLASSES      = 4
+FINE_TUNE_LAYERS = 20          # Fine-tune 20 layer terakhir
 
-# ✅ OPTIMASI #2: Learning rate scheduling
-INITIAL_LR       = 1e-3        # Start lebih tinggi
+# ✅ OPTIMASI #2: Learning rate
+LEARNING_RATE    = 1e-4
 MIN_LR           = 1e-7
-
-# ✅ OPTIMASI #3: Fine-tune bertahap
-FINE_TUNE_AT     = 100         # Unfreeze dari layer ke-100
 
 print('\n⚙️  Konfigurasi ResNet50 OPTIMIZED:')
 print(f'   Backbone         : ResNet50 pretrained ImageNet')
-print(f'   IMG_SIZE         : {IMG_SIZE} (optimal untuk ResNet50)')
+print(f'   IMG_SIZE         : {IMG_SIZE}')
 print(f'   BATCH_SIZE       : {BATCH_SIZE}')
-print(f'   EPOCHS           : {EPOCHS} (maks + EarlyStopping patience=10)')
-print(f'   INITIAL_LR       : {INITIAL_LR}')
+print(f'   EPOCHS           : {EPOCHS}')
+print(f'   LEARNING_RATE    : {LEARNING_RATE}')
+print(f'   Strategi         : Fine-tune {FINE_TUNE_LAYERS} layer terakhir')
 print(f'   Loss             : Categorical Crossentropy + Label Smoothing')
-print(f'   Fine-tune from   : Layer {FINE_TUNE_AT}')
 print(f'   Mixed Precision  : ✅ Aktif')
-print(f'   Class weight     : ✅ Aktif (improved)')
+print(f'   Class weight     : ✅ Aktif')
 print(f'   L2 Regularization: ✅ Aktif')
-print(f'   Test-Time Aug    : ✅ Akan digunakan')
+print(f'   Test-Time Aug    : ✅ Aktif')
 
 # ============================================================
 # CEK DISTRIBUSI DATASET
@@ -185,56 +183,57 @@ base_model = ResNet50(
     input_shape=(IMG_SIZE[0], IMG_SIZE[1], 3)
 )
 
-# Frozen semua dulu
-base_model.trainable = False
+# Fine-tune 20 layer terakhir
+base_model.trainable = True
+for layer in base_model.layers[:-FINE_TUNE_LAYERS]:
+    layer.trainable = False
 
-print(f'\n📊 ResNet50 Base Model:')
+trainable_layers = sum([1 for l in base_model.layers if l.trainable])
+frozen_layers = sum([1 for l in base_model.layers if not l.trainable])
+
+print(f'\n📊 ResNet50 Layers:')
 print(f'   Total layers     : {len(base_model.layers)}')
-print(f'   Status awal      : Semua frozen (akan di-unfreeze nanti)')
+print(f'   Frozen layers    : {frozen_layers}')
+print(f'   Trainable layers : {trainable_layers} ({FINE_TUNE_LAYERS} layer terakhir) ✅')
 
 # ✅ OPTIMASI #7: Classifier head dengan regularization
 inputs  = keras.Input(shape=(IMG_SIZE[0], IMG_SIZE[1], 3), name='input_jalan')
-x       = base_model(inputs, training=False)
+x       = base_model(inputs, training=True)
 x       = layers.GlobalAveragePooling2D(name='gap')(x)
 x       = layers.BatchNormalization(name='bn_1')(x)
-x       = layers.Dense(512, activation='relu', 
-                       kernel_regularizer=regularizers.l2(0.001),
-                       name='fc_512')(x)
-x       = layers.Dropout(0.5, name='dropout_1')(x)
-x       = layers.BatchNormalization(name='bn_2')(x)
-x       = layers.Dense(256, activation='relu',
+x       = layers.Dense(256, activation='relu', 
                        kernel_regularizer=regularizers.l2(0.001),
                        name='fc_256')(x)
-x       = layers.Dropout(0.4, name='dropout_2')(x)
+x       = layers.Dropout(0.5, name='dropout_1')(x)
 outputs = layers.Dense(NUM_CLASSES, activation='softmax', 
-                       dtype='float32',  # Mixed precision fix
+                       dtype='float32',
                        name='output')(x)
 
 model = keras.Model(inputs, outputs, name='ResNet50_Optimized')
+model.summary()
 
 print(f'\n✅ Model architecture created')
-print(f'   Classifier: GAP → BN → Dense(512) → Dropout → BN → Dense(256) → Dropout → Output')
+print(f'   Classifier: GAP → BN → Dense(256) → Dropout → Output')
 print(f'   Regularization: L2 + Dropout + BatchNorm')
 
 # ============================================================
 # ✅ OPTIMASI #8: COMPILE DENGAN LABEL SMOOTHING
 # ============================================================
 model.compile(
-    optimizer=tf.keras.optimizers.Adam(learning_rate=INITIAL_LR),
+    optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
     loss=tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.1),
     metrics=['accuracy']
 )
 
-print(f'\n✅ Model dikompilasi (Stage 1 - Base Frozen)')
-print(f'   Optimizer      : Adam (lr={INITIAL_LR})')
-print(f'   Loss           : Categorical Crossentropy + Label Smoothing 0.1')
-print(f'   Metrics        : Accuracy')
-print(f'   Base trainable : False (akan di-train dulu classifier)')
+print(f'\n✅ Model dikompilasi')
+print(f'   Optimizer : Adam (lr={LEARNING_RATE})')
+print(f'   Loss      : Categorical Crossentropy + Label Smoothing 0.1')
+print(f'   Metrics   : Accuracy')
 
 # ============================================================
-# CALLBACKS STAGE 1
+# CALLBACKS
 # ============================================================
-callbacks_stage1 = [
+callbacks = [
     EarlyStopping(
         monitor='val_accuracy',
         patience=7,
@@ -242,7 +241,7 @@ callbacks_stage1 = [
         verbose=1
     ),
     ModelCheckpoint(
-        os.path.join(OUTPUT_DIR, 'resnet50_opt_stage1.h5'),
+        os.path.join(OUTPUT_DIR, 'resnet50_optimized_best.h5'),
         monitor='val_accuracy',
         save_best_only=True,
         verbose=1
@@ -257,116 +256,32 @@ callbacks_stage1 = [
 ]
 
 # ============================================================
-# STAGE 1: TRAIN CLASSIFIER HEAD ONLY
+# TRAINING
 # ============================================================
 print('\n' + '=' * 70)
-print('🚀 STAGE 1: Training Classifier Head (Base Frozen)')
-print(f'   Epochs      : 10 epochs')
-print(f'   LR          : {INITIAL_LR}')
-print(f'   Trainable   : Hanya classifier head')
-print('=' * 70)
-
-history_stage1 = model.fit(
-    train_generator,
-    epochs=10,
-    validation_data=val_generator,
-    callbacks=callbacks_stage1,
-    class_weight=class_weights_dict,
-    verbose=1
-)
-
-best_val_acc_s1 = max(history_stage1.history['val_accuracy'])
-print(f'\n✅ STAGE 1 Selesai - Best Val Accuracy: {best_val_acc_s1*100:.2f}%')
-
-# ============================================================
-# STAGE 2: FINE-TUNE RESNET50
-# ============================================================
-print('\n' + '=' * 70)
-print('🚀 STAGE 2: Fine-Tuning ResNet50')
-print('=' * 70)
-
-# Unfreeze dari layer tertentu
-base_model.trainable = True
-for layer in base_model.layers[:FINE_TUNE_AT]:
-    layer.trainable = False
-
-trainable_layers = sum([1 for l in base_model.layers if l.trainable])
-frozen_layers    = sum([1 for l in base_model.layers if not l.trainable])
-
-print(f'\n📊 Fine-tuning Configuration:')
-print(f'   Total layers     : {len(base_model.layers)}')
-print(f'   Frozen layers    : {frozen_layers} (layer 0-{FINE_TUNE_AT-1})')
-print(f'   Trainable layers : {trainable_layers} (layer {FINE_TUNE_AT}+)')
-
-# ✅ OPTIMASI #9: Lower learning rate untuk fine-tuning
-FINE_TUNE_LR = 1e-5
-
-model.compile(
-    optimizer=tf.keras.optimizers.Adam(learning_rate=FINE_TUNE_LR),
-    loss=tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.1),
-    metrics=['accuracy']
-)
-
-print(f'\n✅ Model re-compiled untuk fine-tuning')
-print(f'   New LR : {FINE_TUNE_LR} (10x lebih rendah)')
-
-# ✅ OPTIMASI #10: Cosine Decay Learning Rate
-def cosine_decay_with_warmup(epoch, lr):
-    """Custom learning rate schedule"""
-    if epoch < 5:  # Warmup
-        return FINE_TUNE_LR * (epoch + 1) / 5
-    else:
-        # Cosine decay
-        progress = (epoch - 5) / (EPOCHS - 5)
-        return MIN_LR + (FINE_TUNE_LR - MIN_LR) * 0.5 * (1 + np.cos(np.pi * progress))
-
-callbacks_stage2 = [
-    EarlyStopping(
-        monitor='val_accuracy',
-        patience=10,
-        restore_best_weights=True,
-        verbose=1
-    ),
-    ModelCheckpoint(
-        os.path.join(OUTPUT_DIR, 'resnet50_optimized_best.h5'),
-        monitor='val_accuracy',
-        save_best_only=True,
-        verbose=1
-    ),
-    LearningRateScheduler(cosine_decay_with_warmup, verbose=1),
-    ReduceLROnPlateau(
-        monitor='val_loss',
-        factor=0.5,
-        patience=5,
-        min_lr=MIN_LR,
-        verbose=1
-    )
-]
-
-print('\n' + '=' * 70)
-print(f'🚀 TRAINING STAGE 2 — Fine-Tune dengan Cosine LR Schedule')
+print('🚀 TRAINING ResNet50 Fine-Tuning + Optimizations')
 print(f'   Train       : {train_generator.samples} gambar')
 print(f'   Val         : {val_generator.samples} gambar')
-print(f'   Max Epochs  : {EPOCHS}')
-print(f'   LR Schedule : Warmup (5 epochs) → Cosine Decay')
-print(f'   Patience    : 10 epochs')
+print(f'   Epochs      : {EPOCHS}')
+print(f'   LR          : {LEARNING_RATE}')
+print(f'   Strategi    : Fine-tune {FINE_TUNE_LAYERS} layer terakhir')
 print(f'   Target      : Val Accuracy ≥ 80%')
 print('=' * 70)
 
-history_stage2 = model.fit(
+history = model.fit(
     train_generator,
     epochs=EPOCHS,
     validation_data=val_generator,
-    callbacks=callbacks_stage2,
+    callbacks=callbacks,
     class_weight=class_weights_dict,
     verbose=1
 )
 
-best_val_acc = max(history_stage2.history['val_accuracy'])
-total_epochs = len(history_stage2.history['accuracy'])
+best_val_acc = max(history.history['val_accuracy'])
+total_epochs = len(history.history['accuracy'])
 
 print(f'\n{"=" * 70}')
-print(f'📊 HASIL TRAINING STAGE 2:')
+print(f'📊 HASIL TRAINING:')
 print(f'   Best Val Accuracy : {best_val_acc*100:.2f}%')
 print(f'   Epoch berjalan    : {total_epochs} / {EPOCHS}')
 if best_val_acc >= 0.80:
@@ -378,24 +293,14 @@ else:
 print(f'{"=" * 70}')
 
 # ============================================================
-# VISUALISASI TRAINING HISTORY (STAGE 1 + STAGE 2)
+# VISUALISASI TRAINING HISTORY
 # ============================================================
-# Gabungkan history
-all_acc = history_stage1.history['accuracy'] + history_stage2.history['accuracy']
-all_val_acc = history_stage1.history['val_accuracy'] + history_stage2.history['val_accuracy']
-all_loss = history_stage1.history['loss'] + history_stage2.history['loss']
-all_val_loss = history_stage1.history['val_loss'] + history_stage2.history['val_loss']
-
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
-fig.suptitle('ResNet50 OPTIMIZED — Two-Stage Training\n(Stage 1: Classifier | Stage 2: Fine-tune)',
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+fig.suptitle('ResNet50 OPTIMIZED — Fine-Tune 20 Layer\nKlasifikasi Kerusakan Jalan',
              fontsize=13, fontweight='bold')
 
-epochs_range = range(1, len(all_acc) + 1)
-stage1_end = len(history_stage1.history['accuracy'])
-
-ax1.plot(epochs_range, all_acc, label='Train', color='#2196F3', linewidth=2)
-ax1.plot(epochs_range, all_val_acc, label='Val', color='#FF5722', linewidth=2, linestyle='--')
-ax1.axvline(x=stage1_end, color='gray', linewidth=2, linestyle=':', label='Stage 1→2')
+ax1.plot(history.history['accuracy'], label='Train', color='#2196F3', linewidth=2)
+ax1.plot(history.history['val_accuracy'], label='Val', color='#FF5722', linewidth=2, linestyle='--')
 ax1.axhline(y=0.80, color='green', linewidth=1.5, linestyle=':', label='Target 80%')
 ax1.set_title('Accuracy')
 ax1.set_xlabel('Epoch')
@@ -404,9 +309,8 @@ ax1.legend()
 ax1.grid(True, alpha=0.3)
 ax1.set_ylim(0, 1.05)
 
-ax2.plot(epochs_range, all_loss, label='Train', color='#2196F3', linewidth=2)
-ax2.plot(epochs_range, all_val_loss, label='Val', color='#FF5722', linewidth=2, linestyle='--')
-ax2.axvline(x=stage1_end, color='gray', linewidth=2, linestyle=':', label='Stage 1→2')
+ax2.plot(history.history['loss'], label='Train', color='#2196F3', linewidth=2)
+ax2.plot(history.history['val_loss'], label='Val', color='#FF5722', linewidth=2, linestyle='--')
 ax2.set_title('Loss')
 ax2.set_xlabel('Epoch')
 ax2.set_ylabel('Loss')
@@ -665,6 +569,6 @@ print('=' * 70)
 
 print('\n💡 NOTES:')
 print('   - TTA meningkatkan robustness prediksi')
-print('   - Two-stage training mencegah overfitting')
+print('   - Label smoothing + L2 regularization mencegah overfitting')
 print('   - Mixed precision mempercepat training 2-3x')
 print('   - Jika hasil belum 80%, fokus pada penambahan data')

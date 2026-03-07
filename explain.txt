@@ -27,3 +27,15 @@ dan saya memperoleh hasil dari beberapa percobaan dibawah ini :
 | 5  | EfficientNetB0   | 160×160  | 20     | Fine-tune 20 layer      | ❌           | 58.64%       | 52.91%        |
 | 6  | ResNet50         | 160×160  | 20     | Fine-tune 20 layer      | ✅           | 58.64%       | 56.80%        |
 +----+------------------+----------+--------+-------------------------+--------------+--------------+---------------+
+
+spesifikasi:
+- model: resnet50
+- image size: 160x160
+- epochs: 20
+- strategi: Fine-tune 20 layer
+
+Image Size: 224×224
+Batch Size: 16
+Epochs: 20 (Stage 1: 10 epochs + Stage 2: 20 epochs)
+Two-stage training tetap aktif
+Semua optimasi lainnya tetap (TTA, Label Smoothing, Cosine LR, dll)
