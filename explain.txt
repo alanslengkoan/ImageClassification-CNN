@@ -1,0 +1,29 @@
+jadi file resnet50.py jangan diganggu sama sekali saya mau kamu membuat file baru untuk revisi codenya fokus pada model atau tahapannya untuk file directory jangan diganggu karena saya menggunakan google drive sebagai directorynya untuk menyimpan dataset saya. saya sudah membuat beberapa percobaan dengan dataset dibawah ini dengan target akurasi sebesar 80% :
+
+📁 TRAIN:
+   baik      : 240 gambar
+   berat     : 199 gambar
+   ringan    : 202 gambar
+   sedang    : 177 gambar
+   TOTAL     : 818 gambar
+
+📁 TEST:
+   baik      : 60 gambar
+   berat     : 50 gambar
+   ringan    : 51 gambar
+   sedang    : 45 gambar
+   TOTAL     : 206 gambar
+
+✅ TOTAL KESELURUHAN : 1024 gambar
+
+dan saya memperoleh hasil dari beberapa percobaan dibawah ini :
++----+------------------+----------+--------+-------------------------+--------------+--------------+---------------+
+| No | Model            | IMG_SIZE | Epochs | Strategi                | Class Weight | Val Accuracy | Test Accuracy |
++----+------------------+----------+--------+-------------------------+--------------+--------------+---------------+
+| 1  | ResNet50         | 224×224  | 50     | Base Frozen             | ❌           | 62.50%       | 46.25%        |
+| 2  | ResNet50         | 160×160  | 20     | Base Frozen             | ❌           | 57.41%       | 54.37%        |
+| 3  | ResNet50         | 224×224  | 50     | Base Frozen (diperbaiki)| ❌           | 60.49%       | -             |
+| 4  | ResNet50         | 160×160  | 20     | Fine-tune 20 layer      | ❌           | 61.73%       | 65.53%        |
+| 5  | EfficientNetB0   | 160×160  | 20     | Fine-tune 20 layer      | ❌           | 58.64%       | 52.91%        |
+| 6  | ResNet50         | 160×160  | 20     | Fine-tune 20 layer      | ✅           | 58.64%       | 56.80%        |
++----+------------------+----------+--------+-------------------------+--------------+--------------+---------------+
