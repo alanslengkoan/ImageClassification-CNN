@@ -13,7 +13,6 @@ from tensorflow.keras.applications import ResNet50
 from tensorflow.keras.applications.resnet50 import preprocess_input
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
-from tensorflow.keras.optimizers.schedules import CosineDecay
 
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.metrics import roc_curve, auc, precision_recall_curve
@@ -37,16 +36,16 @@ drive.mount('/content/drive')
 # KONFIGURASI
 # ============================================================
 TRAIN_DIR  = '/content/drive/MyDrive/dataset/train'
+VAL_DIR    = '/content/drive/MyDrive/dataset/val'
 TEST_DIR   = '/content/drive/MyDrive/dataset/test'
 OUTPUT_DIR = '/content/drive/MyDrive/dataset'
 
-IMG_SIZE         = (224, 224)   # ✅ kembali ke 224 (optimal ResNet50)
-BATCH_SIZE       = 16
-EPOCHS           = 30           # ✅ naik dari 20 → 30
-VALIDATION_SPLIT = 0.2
-LEARNING_RATE    = 5e-5         # ✅ lebih kecil → lebih hati-hati
+IMG_SIZE         = (224, 224)   # sama dengan jurnal
+BATCH_SIZE       = 32           # ✅ sesuai jurnal (dari 16 → 32)
+EPOCHS           = 50           # ✅ kompromi jurnal 300 vs kita 20
+LEARNING_RATE    = 1e-4         # ✅ sesuai jurnal (dari 5e-5 → 1e-4)
 NUM_CLASSES      = 4
-FINE_TUNE_LAYERS = 30           # ✅ naik dari 20 → 30 layer
+FINE_TUNE_LAYERS = 20           # ✅ fokus fine-tune layer akhir
 
 print('\n⚙️  Konfigurasi ResNet50:')
 print(f'   Backbone         : ResNet50 pretrained ImageNet')
@@ -54,21 +53,18 @@ print(f'   IMG_SIZE         : {IMG_SIZE}')
 print(f'   BATCH_SIZE       : {BATCH_SIZE}')
 print(f'   EPOCHS           : {EPOCHS} (maks + EarlyStopping)')
 print(f'   LEARNING_RATE    : {LEARNING_RATE}')
-print(f'   Loss             : Categorical Crossentropy')
-print(f'   Fine-tune layers : {FINE_TUNE_LAYERS} layer terakhir')
 print(f'   Fine-tune layers : {FINE_TUNE_LAYERS} layer terakhir')
 print(f'   Class weight     : ✅ Aktif (imbalanced dataset)')
 print(f'   L2 Regularizer   : ✅ Aktif (0.0001)')
-print(f'   LR Scheduler     : ✅ Cosine Decay')
-print(f'   Dropout          : ✅ 0.6 / 0.4 (ditingkatkan)')
+print(f'   Split data       : 70% train / 20% val / 10% test')
 
 # ============================================================
 # CEK DISTRIBUSI DATASET
 # ============================================================
 print('\n📊 Distribusi Dataset:')
-print('-' * 45)
+print('-' * 50)
 total_all = 0
-for split, path in [('TRAIN', TRAIN_DIR), ('TEST', TEST_DIR)]:
+for split, path in [('TRAIN', TRAIN_DIR), ('VAL', VAL_DIR), ('TEST', TEST_DIR)]:
     if os.path.exists(path):
         print(f'\n📁 {split}:')
         split_total = 0
@@ -84,18 +80,11 @@ for split, path in [('TRAIN', TRAIN_DIR), ('TEST', TEST_DIR)]:
         print(f'❌ {split} → folder tidak ditemukan!')
 print(f'\n✅ TOTAL KESELURUHAN : {total_all} gambar')
 
-if os.path.exists(TRAIN_DIR):
-    total_train = sum([len(f) for r, d, f in os.walk(TRAIN_DIR)])
-    print(f'\n📊 Estimasi Pembagian:')
-    print(f'   Training (80%) : ~{int(total_train * 0.8)} gambar')
-    print(f'   Validasi (20%) : ~{int(total_train * 0.2)} gambar')
-
 # ============================================================
-# AUGMENTASI REALISTIS UNTUK FOTO JALAN
+# AUGMENTASI
 # ============================================================
 train_datagen = ImageDataGenerator(
     preprocessing_function=preprocess_input,
-    validation_split=VALIDATION_SPLIT,
     rotation_range=20,
     width_shift_range=0.1,
     height_shift_range=0.1,
@@ -107,32 +96,30 @@ train_datagen = ImageDataGenerator(
     fill_mode='nearest'
 )
 
-test_datagen = ImageDataGenerator(preprocessing_function=preprocess_input)
+val_test_datagen = ImageDataGenerator(preprocessing_function=preprocess_input)
 
-# Generator TRAIN → 80%
+# Generator TRAIN
 train_generator = train_datagen.flow_from_directory(
     TRAIN_DIR,
     target_size=IMG_SIZE,
     batch_size=BATCH_SIZE,
     class_mode='categorical',
-    subset='training',
     shuffle=True,
     seed=42
 )
 
-# Generator VAL → 20% otomatis
-val_generator = train_datagen.flow_from_directory(
-    TRAIN_DIR,
+# Generator VAL — folder terpisah, tanpa augmentasi
+val_generator = val_test_datagen.flow_from_directory(
+    VAL_DIR,
     target_size=IMG_SIZE,
     batch_size=BATCH_SIZE,
     class_mode='categorical',
-    subset='validation',
     shuffle=False,
     seed=42
 )
 
 # Generator TEST
-test_generator = test_datagen.flow_from_directory(
+test_generator = val_test_datagen.flow_from_directory(
     TEST_DIR,
     target_size=IMG_SIZE,
     batch_size=BATCH_SIZE,
@@ -141,18 +128,17 @@ test_generator = test_datagen.flow_from_directory(
 )
 
 print('\n📊 Pembagian Data:')
-print(f'   Train (80%) : {train_generator.samples} gambar')
+print(f'   Train (70%) : {train_generator.samples} gambar')
 print(f'   Val   (20%) : {val_generator.samples} gambar')
-print(f'   Test        : {test_generator.samples} gambar')
+print(f'   Test  (10%) : {test_generator.samples} gambar')
 print(f'   Kelas       : {train_generator.class_indices}')
 
-# Update label sesuai urutan folder
 CLASS_NAMES  = list(train_generator.class_indices.keys())
 CLASS_LABELS = [c.title() for c in CLASS_NAMES]
 print(f'   Label       : {CLASS_LABELS}')
 
 # ============================================================
-# ✅ HITUNG CLASS WEIGHT (untuk imbalanced dataset)
+# CLASS WEIGHT
 # ============================================================
 class_weights_array = class_weight.compute_class_weight(
     class_weight='balanced',
@@ -176,33 +162,31 @@ base_model = ResNet50(
     input_shape=(IMG_SIZE[0], IMG_SIZE[1], 3)
 )
 
-# Frozen semua kecuali 20 layer terakhir
 base_model.trainable = True
 for layer in base_model.layers[:-FINE_TUNE_LAYERS]:
     layer.trainable = False
 
-# Cek layer
 trainable_layers = sum([1 for l in base_model.layers if l.trainable])
 frozen_layers    = sum([1 for l in base_model.layers if not l.trainable])
 print(f'\n📊 ResNet50 Layers:')
 print(f'   Total layer      : {len(base_model.layers)}')
 print(f'   Frozen layer     : {frozen_layers}')
-print(f'   Trainable layer  : {trainable_layers} (20 terakhir) ✅')
+print(f'   Trainable layer  : {trainable_layers} ({FINE_TUNE_LAYERS} terakhir) ✅')
 
-# Classifier Head — GlobalMaxPooling + Dropout lebih tinggi
+# Classifier Head
 inputs  = keras.Input(shape=(IMG_SIZE[0], IMG_SIZE[1], 3), name='input_jalan')
 x       = base_model(inputs, training=False)
-x       = layers.GlobalMaxPooling2D(name='gmp')(x)          # ✅ GlobalMaxPooling
+x       = layers.GlobalAveragePooling2D(name='gap')(x)
 x       = layers.Dense(512, activation='relu',
                         kernel_regularizer=keras.regularizers.l2(0.0001),
                         name='fc_512')(x)
 x       = layers.BatchNormalization(name='bn_1')(x)
-x       = layers.Dropout(0.6, name='dropout_1')(x)          # ✅ naik 0.5 → 0.6
+x       = layers.Dropout(0.5, name='dropout_1')(x)
 x       = layers.Dense(256, activation='relu',
                         kernel_regularizer=keras.regularizers.l2(0.0001),
                         name='fc_256')(x)
 x       = layers.BatchNormalization(name='bn_2')(x)
-x       = layers.Dropout(0.4, name='dropout_2')(x)          # ✅ naik 0.3 → 0.4
+x       = layers.Dropout(0.3, name='dropout_2')(x)
 outputs = layers.Dense(NUM_CLASSES, activation='softmax', name='output')(x)
 
 model = keras.Model(inputs, outputs=outputs, name='ResNet50_FineTune_Jalan')
@@ -215,32 +199,25 @@ print(f'   Trainable (aktif) : {trainable_params:,}')
 print(f'   Frozen (dikunci)  : {frozen_params:,}')
 
 # ============================================================
-# PHASE 1 — Fine-tune 30 layer terakhir
+# COMPILE
 # ============================================================
-EPOCHS_PHASE1 = 10
-
-total_steps_p1 = (train_generator.samples // BATCH_SIZE) * EPOCHS_PHASE1
-lr_schedule_p1 = CosineDecay(
-    initial_learning_rate=LEARNING_RATE,
-    decay_steps=total_steps_p1,
-    alpha=1e-6
-)
-
 model.compile(
-    optimizer=tf.keras.optimizers.Adam(learning_rate=lr_schedule_p1),
+    optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
     loss='categorical_crossentropy',
     metrics=['accuracy']
 )
-print(f'\n✅ Phase 1 dikompilasi')
-print(f'   Optimizer  : Adam + Cosine Decay')
-print(f'   LR awal    : {LEARNING_RATE} → 1e-6')
-print(f'   Fine-tune  : {FINE_TUNE_LAYERS} layer terakhir')
-print( '   Loss       : Categorical Crossentropy')
+print(f'\n✅ Model dikompilasi')
+print(f'   Optimizer : Adam (lr={LEARNING_RATE})')
+print( '   Loss      : Categorical Crossentropy')
+print( '   Metrics   : Accuracy')
 
-callbacks_p1 = [
+# ============================================================
+# CALLBACKS
+# ============================================================
+callbacks = [
     EarlyStopping(
         monitor='val_accuracy',
-        patience=8,
+        patience=10,
         restore_best_weights=True,
         verbose=1
     ),
@@ -249,102 +226,47 @@ callbacks_p1 = [
         monitor='val_accuracy',
         save_best_only=True,
         verbose=1
-    )
-]
-
-print('\n' + '=' * 60)
-print('🚀 PHASE 1 — Fine-tune 30 layer terakhir')
-print(f'   Train  : {train_generator.samples} gambar')
-print(f'   Val    : {val_generator.samples} gambar')
-print(f'   Epochs : maks {EPOCHS_PHASE1}')
-print('=' * 60)
-
-history_p1 = model.fit(
-    train_generator,
-    epochs=EPOCHS_PHASE1,
-    validation_data=val_generator,
-    callbacks=callbacks_p1,
-    class_weight=class_weights_dict,
-    verbose=1
-)
-
-best_val_p1 = max(history_p1.history['val_accuracy'])
-print(f'\n📊 Phase 1 selesai — Best Val Accuracy: {best_val_p1*100:.2f}%')
-
-# ============================================================
-# PHASE 2 — Full Fine-tune (semua layer dibuka) ✅ BARU
-# ============================================================
-EPOCHS_PHASE2 = 10
-LR_PHASE2     = 1e-5   # LR sangat kecil agar tidak merusak weights
-
-print('\n' + '=' * 60)
-print('🔓 PHASE 2 — Full Fine-tune (semua layer dibuka)')
-print(f'   LR Phase 2 : {LR_PHASE2} (sangat kecil)')
-print(f'   Epochs     : maks {EPOCHS_PHASE2}')
-print('=' * 60)
-
-# Buka semua layer
-base_model.trainable = True
-for layer in base_model.layers:
-    layer.trainable = True
-
-total_trainable = sum([1 for l in base_model.layers if l.trainable])
-print(f'   Total layer trainable : {total_trainable} ✅')
-
-total_steps_p2 = (train_generator.samples // BATCH_SIZE) * EPOCHS_PHASE2
-lr_schedule_p2 = CosineDecay(
-    initial_learning_rate=LR_PHASE2,
-    decay_steps=total_steps_p2,
-    alpha=1e-7
-)
-
-model.compile(
-    optimizer=tf.keras.optimizers.Adam(learning_rate=lr_schedule_p2),
-    loss='categorical_crossentropy',
-    metrics=['accuracy']
-)
-
-callbacks_p2 = [
-    EarlyStopping(
-        monitor='val_accuracy',
-        patience=8,
-        restore_best_weights=True,
-        verbose=1
     ),
-    ModelCheckpoint(
-        os.path.join(OUTPUT_DIR, 'resnet50_finetune_best.h5'),
-        monitor='val_accuracy',
-        save_best_only=True,
+    ReduceLROnPlateau(
+        monitor='val_loss',
+        factor=0.5,
+        patience=5,
+        min_lr=1e-6,
         verbose=1
     )
 ]
 
-history_p2 = model.fit(
+# ============================================================
+# TRAINING
+# ============================================================
+print('\n' + '=' * 60)
+print('🚀 TRAINING ResNet50 — Fine-Tune + Class Weight')
+print(f'   Train       : {train_generator.samples} gambar (70%)')
+print(f'   Val         : {val_generator.samples} gambar (20%)')
+print(f'   Test        : {test_generator.samples} gambar (10%)')
+print(f'   Epochs      : maks {EPOCHS} + EarlyStopping (patience=10)')
+print(f'   LR          : {LEARNING_RATE}')
+print(f'   Batch size  : {BATCH_SIZE}')
+print(f'   Fine-tune   : {FINE_TUNE_LAYERS} layer terakhir')
+print( '   Target      : Val Accuracy ≥ 80%')
+print('=' * 60)
+
+history = model.fit(
     train_generator,
-    epochs=EPOCHS_PHASE2,
+    epochs=EPOCHS,
     validation_data=val_generator,
-    callbacks=callbacks_p2,
+    callbacks=callbacks,
     class_weight=class_weights_dict,
     verbose=1
 )
 
-best_val_p2  = max(history_p2.history['val_accuracy'])
-best_val_acc = max(best_val_p1, best_val_p2)
-total_epochs = len(history_p1.history['accuracy']) + len(history_p2.history['accuracy'])
-
-# Gabungkan history untuk visualisasi
-combined_acc     = history_p1.history['accuracy']     + history_p2.history['accuracy']
-combined_val_acc = history_p1.history['val_accuracy'] + history_p2.history['val_accuracy']
-combined_loss    = history_p1.history['loss']         + history_p2.history['loss']
-combined_val_loss= history_p1.history['val_loss']     + history_p2.history['val_loss']
-phase1_end       = len(history_p1.history['accuracy'])
+best_val_acc = max(history.history['val_accuracy'])
+total_epochs = len(history.history['accuracy'])
 
 print(f'\n{"=" * 60}')
 print(f'📊 HASIL TRAINING:')
-print(f'   Best Val Phase 1  : {best_val_p1*100:.2f}%')
-print(f'   Best Val Phase 2  : {best_val_p2*100:.2f}%')
-print(f'   Best Val Overall  : {best_val_acc*100:.2f}%')
-print(f'   Total Epoch       : {total_epochs}')
+print(f'   Best Val Accuracy : {best_val_acc*100:.2f}%')
+print(f'   Epoch berjalan    : {total_epochs}')
 if best_val_acc >= 0.80:
     print(f'   Status            : ✅ TARGET TERCAPAI!')
 elif best_val_acc >= 0.70:
@@ -353,24 +275,22 @@ else:
     print(f'   Status            : ❌ Belum mencapai target')
 print(f'{"=" * 60}')
 
-
 # ============================================================
 # VISUALISASI TRAINING HISTORY
 # ============================================================
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-fig.suptitle('ResNet50 2-Phase Fine-Tuning — Klasifikasi Kerusakan Jalan\n(Phase 1: 30 Layer | Phase 2: Full Unfreeze | Cosine Decay)',
+fig.suptitle('ResNet50 Fine-Tuning — Klasifikasi Kerusakan Jalan\n'
+             '(Fine-tune 20 Layer, Input 224×224, Batch 32, LR 1e-4)',
              fontsize=13, fontweight='bold')
 
-ax1.plot(combined_acc,     label='Train', color='#2196F3', linewidth=2)
-ax1.plot(combined_val_acc, label='Val',   color='#FF5722', linewidth=2, linestyle='--')
-ax1.axvline(x=phase1_end, color='purple', linewidth=1.5, linestyle=':', label=f'Phase 2 mulai (ep {phase1_end})')
+ax1.plot(history.history['accuracy'],     label='Train', color='#2196F3', linewidth=2)
+ax1.plot(history.history['val_accuracy'], label='Val',   color='#FF5722', linewidth=2, linestyle='--')
 ax1.axhline(y=0.80, color='green', linewidth=1.5, linestyle=':', label='Target 80%')
 ax1.set_title('Accuracy'); ax1.set_xlabel('Epoch'); ax1.set_ylabel('Accuracy')
 ax1.legend(); ax1.grid(True, alpha=0.3); ax1.set_ylim(0, 1.05)
 
-ax2.plot(combined_loss,     label='Train', color='#2196F3', linewidth=2)
-ax2.plot(combined_val_loss, label='Val',   color='#FF5722', linewidth=2, linestyle='--')
-ax2.axvline(x=phase1_end, color='purple', linewidth=1.5, linestyle=':', label=f'Phase 2 mulai (ep {phase1_end})')
+ax2.plot(history.history['loss'],     label='Train', color='#2196F3', linewidth=2)
+ax2.plot(history.history['val_loss'], label='Val',   color='#FF5722', linewidth=2, linestyle='--')
 ax2.set_title('Loss'); ax2.set_xlabel('Epoch'); ax2.set_ylabel('Loss')
 ax2.legend(); ax2.grid(True, alpha=0.3)
 
@@ -519,11 +439,6 @@ print(f'   Backbone          : ResNet50 pretrained ImageNet')
 print(f'   Strategi          : Fine-tune {FINE_TUNE_LAYERS} layer terakhir')
 print(f'   Class Weight      : ✅ Aktif')
 print(f'   L2 Regularization : ✅ Aktif (0.0001)')
-print(f'   LR Scheduler      : ✅ Cosine Decay')
-print(f'   Pooling           : GlobalMaxPooling2D')
-print(f'   Dropout           : 0.6 / 0.4')
-print(f'   Phase 1 LR       : {LEARNING_RATE} → 1e-6 (30 layer)')
-print(f'   Phase 2 LR       : {LR_PHASE2} → 1e-7 (full unfreeze)')
 print(f'   Input size        : {IMG_SIZE}')
 print(f'   Batch size        : {BATCH_SIZE}')
 print(f'   Optimizer         : Adam (lr={LEARNING_RATE})')
@@ -548,7 +463,5 @@ if best_val_acc >= 0.80:
     print('\n✅ TARGET TERCAPAI ≥ 80%!')
 elif best_val_acc >= 0.70:
     print(f'\n🟡 Mendekati target (saat ini {best_val_acc*100:.2f}%)')
-    print('   → Pertimbangkan menambah data untuk hasil lebih baik')
 else:
     print(f'\n⚠️  Belum mencapai 80% (saat ini {best_val_acc*100:.2f}%)')
-    print('   → Solusi utama: tambah data per kelas minimal 300 gambar')

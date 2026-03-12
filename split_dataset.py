@@ -9,13 +9,15 @@ drive.mount('/content/drive')
 # ============================================================
 # KONFIGURASI PATH & KELAS
 # ============================================================
-SOURCE_DIR  = '/content/drive/MyDrive/dataset_all'   # semua gambar
-TRAIN_DIR   = '/content/drive/MyDrive/dataset/train' # output train
-TEST_DIR    = '/content/drive/MyDrive/dataset/test'  # output test
+SOURCE_DIR = '/content/drive/MyDrive/dataset_all'    # semua gambar
+TRAIN_DIR  = '/content/drive/MyDrive/dataset/train'  # 70%
+VAL_DIR    = '/content/drive/MyDrive/dataset/val'    # 20%
+TEST_DIR   = '/content/drive/MyDrive/dataset/test'   # 10%
 
-# ✅ Nama folder kelas yang baru
 CLASSES     = ['baik', 'sedang', 'ringan', 'berat']
-TRAIN_RATIO = 0.8  # 80% train, 20% test
+TRAIN_RATIO = 0.7   # 70% train
+VAL_RATIO   = 0.2   # 20% val
+TEST_RATIO  = 0.1   # 10% test
 
 random.seed(42)
 
@@ -25,9 +27,9 @@ random.seed(42)
 print('📂 Cek folder dataset_all:')
 print('-' * 45)
 total_source = 0
-semua_ada = True
+semua_ada    = True
 for cls in CLASSES:
-    path  = os.path.join(SOURCE_DIR, cls)
+    path = os.path.join(SOURCE_DIR, cls)
     if os.path.exists(path):
         count = len([f for f in os.listdir(path)
                      if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
@@ -42,36 +44,34 @@ print(f'\n   {"TOTAL":10s}: {total_source} gambar')
 
 if not semua_ada:
     print('\n❌ Ada folder yang tidak ditemukan!')
-    print('   Pastikan struktur di Google Drive:')
-    print('   MyDrive/dataset_all/')
-    for cls in CLASSES:
-        print(f'   ├── {cls}/')
     raise SystemExit('Hentikan script — perbaiki folder terlebih dahulu.')
 
 # ============================================================
-# HAPUS FOLDER TRAIN & TEST LAMA, BUAT ULANG
+# HAPUS FOLDER LAMA, BUAT ULANG
 # ============================================================
-print('\n🗑️  Menghapus folder train & test lama...')
-for path in [TRAIN_DIR, TEST_DIR]:
+print('\n🗑️  Menghapus folder train / val / test lama...')
+for path in [TRAIN_DIR, VAL_DIR, TEST_DIR]:
     if os.path.exists(path):
         shutil.rmtree(path)
         print(f'   ✅ Dihapus : {path}')
     else:
         print(f'   ⚠️  Tidak ada: {path} (skip)')
 
-print('\n📁 Membuat folder train & test baru...')
+print('\n📁 Membuat folder train / val / test baru...')
 for cls in CLASSES:
     os.makedirs(os.path.join(TRAIN_DIR, cls), exist_ok=True)
+    os.makedirs(os.path.join(VAL_DIR,   cls), exist_ok=True)
     os.makedirs(os.path.join(TEST_DIR,  cls), exist_ok=True)
 print('   ✅ Semua folder berhasil dibuat')
 
 # ============================================================
-# BAGI ACAK 80% TRAIN / 20% TEST
+# BAGI ACAK 70% TRAIN / 20% VAL / 10% TEST
 # ============================================================
-print('\n📊 Membagi dataset secara acak (80% train / 20% test)...')
-print('-' * 45)
+print('\n📊 Membagi dataset secara acak (70% train / 20% val / 10% test)...')
+print('-' * 50)
 
 total_train = 0
+total_val   = 0
 total_test  = 0
 
 for cls in CLASSES:
@@ -80,35 +80,39 @@ for cls in CLASSES:
                   if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
     random.shuffle(all_images)
 
-    split      = int(len(all_images) * TRAIN_RATIO)
-    train_imgs = all_images[:split]
-    test_imgs  = all_images[split:]
+    n          = len(all_images)
+    n_train    = int(n * TRAIN_RATIO)
+    n_val      = int(n * VAL_RATIO)
+    train_imgs = all_images[:n_train]
+    val_imgs   = all_images[n_train:n_train + n_val]
+    test_imgs  = all_images[n_train + n_val:]
 
     for img in train_imgs:
-        shutil.copy(os.path.join(src, img),
-                    os.path.join(TRAIN_DIR, cls, img))
+        shutil.copy(os.path.join(src, img), os.path.join(TRAIN_DIR, cls, img))
+    for img in val_imgs:
+        shutil.copy(os.path.join(src, img), os.path.join(VAL_DIR,   cls, img))
     for img in test_imgs:
-        shutil.copy(os.path.join(src, img),
-                    os.path.join(TEST_DIR, cls, img))
+        shutil.copy(os.path.join(src, img), os.path.join(TEST_DIR,  cls, img))
 
     total_train += len(train_imgs)
+    total_val   += len(val_imgs)
     total_test  += len(test_imgs)
-    print(f'   {cls:10s}: {len(train_imgs):3d} train | {len(test_imgs):3d} test')
+    print(f'   {cls:10s}: {len(train_imgs):3d} train | {len(val_imgs):3d} val | {len(test_imgs):3d} test')
 
-print('-' * 45)
-print(f'   {"TOTAL":10s}: {total_train:3d} train | {total_test:3d} test')
+print('-' * 50)
+print(f'   {"TOTAL":10s}: {total_train:3d} train | {total_val:3d} val | {total_test:3d} test')
 
 # ============================================================
 # VERIFIKASI HASIL
 # ============================================================
 print('\n✅ Verifikasi Hasil Pembagian:')
-print('-' * 45)
-for split, path in [('TRAIN', TRAIN_DIR), ('TEST', TEST_DIR)]:
+print('-' * 50)
+for split, path in [('TRAIN', TRAIN_DIR), ('VAL', VAL_DIR), ('TEST', TEST_DIR)]:
     print(f'\n📁 {split}:')
     split_total = 0
     for cls in CLASSES:
-        cls_path = os.path.join(path, cls)
-        count    = len(os.listdir(cls_path))
+        cls_path    = os.path.join(path, cls)
+        count       = len(os.listdir(cls_path))
         split_total += count
         print(f'   {cls:10s}: {count} gambar')
     print(f'   {"TOTAL":10s}: {split_total} gambar')
@@ -116,18 +120,24 @@ for split, path in [('TRAIN', TRAIN_DIR), ('TEST', TEST_DIR)]:
 # ============================================================
 # RINGKASAN
 # ============================================================
-print(f'\n{"=" * 45}')
+total_all = total_train + total_val + total_test
+print(f'\n{"=" * 50}')
 print(f'🎉 Dataset berhasil dibagi!')
 print(f'   Kelas  : {CLASSES}')
 print(f'   Train  : {total_train} gambar ({int(TRAIN_RATIO*100)}%)')
-print(f'   Test   : {total_test} gambar ({int((1-TRAIN_RATIO)*100)}%)')
-print(f'{"=" * 45}')
+print(f'   Val    : {total_val} gambar ({int(VAL_RATIO*100)}%)')
+print(f'   Test   : {total_test} gambar ({int(TEST_RATIO*100)}%)')
+print(f'   Total  : {total_all} gambar')
+print(f'{"=" * 50}')
 print(f'\n📁 Struktur folder hasil:')
 print(f'   MyDrive/dataset/')
 print(f'   ├── train/')
 for cls in CLASSES:
     print(f'   │   ├── {cls}/')
+print(f'   ├── val/')
+for cls in CLASSES:
+    print(f'   │   ├── {cls}/')
 print(f'   └── test/')
 for cls in CLASSES:
     print(f'       ├── {cls}/')
-print(f'\n➡️  Siap untuk training! Jalankan resnet50_phase1.py')
+print(f'\n➡️  Siap untuk training! Jalankan resnet50_finetune.py')
