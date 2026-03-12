@@ -43,9 +43,9 @@ OUTPUT_DIR = '/content/drive/MyDrive/dataset'
 IMG_SIZE         = (224, 224)   # sama dengan jurnal
 BATCH_SIZE       = 32           # ✅ sesuai jurnal (dari 16 → 32)
 EPOCHS           = 50           # ✅ kompromi jurnal 300 vs kita 20
-LEARNING_RATE    = 5e-5         # ✅ dikecilkan 1e-4 → 5e-5 agar lebih stabil
-NUM_CLASSES      = 4
+LEARNING_RATE    = 1e-4         # ✅ sesuai jurnal (dari 5e-5 → 1e-4)
 FINE_TUNE_LAYERS = 20           # ✅ fokus fine-tune layer akhir
+NUM_CLASSES      = 4
 
 print('\n⚙️  Konfigurasi ResNet50:')
 print(f'   Backbone         : ResNet50 pretrained ImageNet')
@@ -280,7 +280,7 @@ print(f'{"=" * 60}')
 # ============================================================
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 fig.suptitle('ResNet50 Fine-Tuning — Klasifikasi Kerusakan Jalan\n'
-             '(Fine-tune 20 Layer, Input 224×224, Batch 32, LR 5e-5)',
+             '(Fine-tune 20 Layer, Input 224×224, Batch 32, LR 1e-4)',
              fontsize=13, fontweight='bold')
 
 ax1.plot(history.history['accuracy'],     label='Train', color='#2196F3', linewidth=2)
