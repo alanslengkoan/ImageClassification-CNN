@@ -43,7 +43,7 @@ OUTPUT_DIR = '/content/drive/MyDrive/dataset'
 IMG_SIZE         = (224, 224)   # sama dengan jurnal
 BATCH_SIZE       = 32           # ✅ sesuai jurnal (dari 16 → 32)
 EPOCHS           = 50           # ✅ kompromi jurnal 300 vs kita 20
-LEARNING_RATE    = 1e-4         # ✅ sesuai jurnal (dari 5e-5 → 1e-4)
+LEARNING_RATE    = 1e-4         # ✅ kembali ke 1e-4 (lebih cocok untuk dataset kita)
 FINE_TUNE_LAYERS = 20           # ✅ fokus fine-tune layer akhir
 NUM_CLASSES      = 4
 
@@ -229,8 +229,8 @@ callbacks = [
     ),
     ReduceLROnPlateau(
         monitor='val_loss',
-        factor=0.5,
-        patience=5,
+        factor=0.3,      # ✅ lebih halus dari 0.5 → 0.3
+        patience=7,      # ✅ lebih sabar dari 5 → 7
         min_lr=1e-6,
         verbose=1
     )
