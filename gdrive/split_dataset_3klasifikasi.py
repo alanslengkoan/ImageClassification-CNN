@@ -1,4 +1,4 @@
-yimport os, shutil, random
+import os, shutil, random
 
 # ============================================================
 # MOUNT GOOGLE DRIVE
