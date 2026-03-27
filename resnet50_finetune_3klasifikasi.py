@@ -35,26 +35,27 @@ drive.mount('/content/drive')
 # ============================================================
 # KONFIGURASI
 # ============================================================
-TRAIN_DIR  = '/content/drive/MyDrive/dataset/train'
-VAL_DIR    = '/content/drive/MyDrive/dataset/val'
-TEST_DIR   = '/content/drive/MyDrive/dataset/test'
-OUTPUT_DIR = '/content/drive/MyDrive/dataset'
+TRAIN_DIR  = '/content/drive/MyDrive/dataset_3class/train'
+VAL_DIR    = '/content/drive/MyDrive/dataset_3class/val'
+TEST_DIR   = '/content/drive/MyDrive/dataset_3class/test'
+OUTPUT_DIR = '/content/drive/MyDrive/dataset_3class'
 
-IMG_SIZE         = (224, 224)   # sama dengan jurnal
-BATCH_SIZE       = 32           # ✅ sesuai jurnal (dari 16 → 32)
-EPOCHS           = 50           # ✅ kompromi jurnal 300 vs kita 20
-LEARNING_RATE    = 1e-4         # ✅ kembali ke 1e-4 (lebih cocok untuk dataset kita)
-NUM_CLASSES      = 4
-FINE_TUNE_LAYERS = 20           # ✅ fokus fine-tune layer akhir
+IMG_SIZE         = (224, 224)
+BATCH_SIZE       = 32
+EPOCHS           = 20
+LEARNING_RATE    = 1e-4
+NUM_CLASSES      = 3            # ✅ 3 kelas
+FINE_TUNE_LAYERS = 20
 
-print('\n⚙️  Konfigurasi ResNet50:')
+print('\n⚙️  Konfigurasi ResNet50 — 3 Kelas:')
 print(f'   Backbone         : ResNet50 pretrained ImageNet')
+print(f'   Kelas            : Sedang, Ringan, Berat')
 print(f'   IMG_SIZE         : {IMG_SIZE}')
 print(f'   BATCH_SIZE       : {BATCH_SIZE}')
-print(f'   EPOCHS           : {EPOCHS} (maks + EarlyStopping)')
+print(f'   EPOCHS           : {EPOCHS}')
 print(f'   LEARNING_RATE    : {LEARNING_RATE}')
 print(f'   Fine-tune layers : {FINE_TUNE_LAYERS} layer terakhir')
-print(f'   Class weight     : ✅ Aktif (imbalanced dataset)')
+print(f'   Class weight     : ✅ Aktif')
 print(f'   L2 Regularizer   : ✅ Aktif (0.0001)')
 print(f'   Split data       : 70% train / 20% val / 10% test')
 
@@ -108,7 +109,7 @@ train_generator = train_datagen.flow_from_directory(
     seed=42
 )
 
-# Generator VAL — folder terpisah, tanpa augmentasi
+# Generator VAL
 val_generator = val_test_datagen.flow_from_directory(
     VAL_DIR,
     target_size=IMG_SIZE,
@@ -147,14 +148,12 @@ class_weights_array = class_weight.compute_class_weight(
 )
 class_weights_dict = dict(enumerate(class_weights_array))
 
-print('\n⚖️  Class Weights (otomatis dihitung):')
-for idx, (cls, w) in enumerate(zip(CLASS_LABELS, class_weights_array)):
+print('\n⚖️  Class Weights:')
+for cls, w in zip(CLASS_LABELS, class_weights_array):
     print(f'   {cls:10s}: {w:.4f}')
-print('   → Kelas dengan data sedikit diberi bobot lebih tinggi')
 
 # ============================================================
 # BUILD MODEL RESNET50
-# Fine-tune 20 layer terakhir
 # ============================================================
 base_model = ResNet50(
     weights='imagenet',
@@ -189,14 +188,8 @@ x       = layers.BatchNormalization(name='bn_2')(x)
 x       = layers.Dropout(0.3, name='dropout_2')(x)
 outputs = layers.Dense(NUM_CLASSES, activation='softmax', name='output')(x)
 
-model = keras.Model(inputs, outputs=outputs, name='ResNet50_FineTune_Jalan')
+model = keras.Model(inputs, outputs=outputs, name='ResNet50_3Class_Jalan')
 model.summary()
-
-trainable_params = sum([tf.size(w).numpy() for w in model.trainable_weights])
-frozen_params    = sum([tf.size(w).numpy() for w in model.non_trainable_weights])
-print(f'\n📊 Total Parameter   : {model.count_params():,}')
-print(f'   Trainable (aktif) : {trainable_params:,}')
-print(f'   Frozen (dikunci)  : {frozen_params:,}')
 
 # ============================================================
 # COMPILE
@@ -209,28 +202,29 @@ model.compile(
 print(f'\n✅ Model dikompilasi')
 print(f'   Optimizer : Adam (lr={LEARNING_RATE})')
 print( '   Loss      : Categorical Crossentropy')
-print( '   Metrics   : Accuracy')
 
 # ============================================================
 # CALLBACKS
 # ============================================================
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
 callbacks = [
     EarlyStopping(
         monitor='val_accuracy',
-        patience=15,             # ✅ naik dari 10 → 15
+        patience=7,
         restore_best_weights=True,
         verbose=1
     ),
     ModelCheckpoint(
-        os.path.join(OUTPUT_DIR, 'resnet50_finetune_best.h5'),
+        os.path.join(OUTPUT_DIR, 'resnet50_3class_best.h5'),
         monitor='val_accuracy',
         save_best_only=True,
         verbose=1
     ),
     ReduceLROnPlateau(
         monitor='val_loss',
-        factor=0.3,      # ✅ lebih halus dari 0.5 → 0.3
-        patience=7,      # ✅ lebih sabar dari 5 → 7
+        factor=0.3,
+        patience=5,
         min_lr=1e-6,
         verbose=1
     )
@@ -240,15 +234,12 @@ callbacks = [
 # TRAINING
 # ============================================================
 print('\n' + '=' * 60)
-print('🚀 TRAINING ResNet50 — Fine-Tune + Class Weight')
-print(f'   Train       : {train_generator.samples} gambar (70%)')
-print(f'   Val         : {val_generator.samples} gambar (20%)')
-print(f'   Test        : {test_generator.samples} gambar (10%)')
-print(f'   Epochs      : maks {EPOCHS} + EarlyStopping (patience=10)')
-print(f'   LR          : {LEARNING_RATE}')
-print(f'   Batch size  : {BATCH_SIZE}')
-print(f'   Fine-tune   : {FINE_TUNE_LAYERS} layer terakhir')
-print( '   Target      : Val Accuracy ≥ 80%')
+print('🚀 TRAINING ResNet50 — 3 Kelas (Sedang, Ringan, Berat)')
+print(f'   Train  : {train_generator.samples} gambar')
+print(f'   Val    : {val_generator.samples} gambar')
+print(f'   Epochs : maks {EPOCHS} + EarlyStopping (patience=7)')
+print(f'   LR     : {LEARNING_RATE}')
+print( '   Target : Val Accuracy ≥ 80%')
 print('=' * 60)
 
 history = model.fit(
@@ -279,8 +270,8 @@ print(f'{"=" * 60}')
 # VISUALISASI TRAINING HISTORY
 # ============================================================
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-fig.suptitle('ResNet50 Fine-Tuning — Klasifikasi Kerusakan Jalan\n'
-             '(Fine-tune 20 Layer, Input 224×224, Batch 32, LR 1e-4)',
+fig.suptitle('ResNet50 Fine-Tuning — Klasifikasi Kerusakan Jalan (3 Kelas)\n'
+             '(Sedang, Ringan, Berat | Input 224×224 | Batch 32 | LR 1e-4)',
              fontsize=13, fontweight='bold')
 
 ax1.plot(history.history['accuracy'],     label='Train', color='#2196F3', linewidth=2)
@@ -295,7 +286,7 @@ ax2.set_title('Loss'); ax2.set_xlabel('Epoch'); ax2.set_ylabel('Loss')
 ax2.legend(); ax2.grid(True, alpha=0.3)
 
 plt.tight_layout()
-save_path = os.path.join(OUTPUT_DIR, 'resnet50_finetune_history.png')
+save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_history.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
 plt.show()
 print(f'✅ Grafik training tersimpan: {save_path}')
@@ -310,7 +301,6 @@ test_loss, test_acc = model.evaluate(test_generator, verbose=1)
 print(f'\n🏆 Test Accuracy : {test_acc*100:.2f}%')
 print(f'   Test Loss     : {test_loss:.4f}')
 
-# Prediksi
 test_generator.reset()
 y_pred_prob = model.predict(test_generator, verbose=1)
 y_pred      = np.argmax(y_pred_prob, axis=1)
@@ -320,16 +310,16 @@ y_true      = test_generator.classes
 # CONFUSION MATRIX
 # ============================================================
 cm = confusion_matrix(y_true, y_pred)
-plt.figure(figsize=(8, 6))
+plt.figure(figsize=(7, 5))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
             xticklabels=CLASS_LABELS, yticklabels=CLASS_LABELS,
             linewidths=0.5, annot_kws={'size': 12})
-plt.title('Confusion Matrix — ResNet50 Fine-Tuning\nKlasifikasi Kerusakan Jalan',
+plt.title('Confusion Matrix — ResNet50 (3 Kelas)\nKlasifikasi Kerusakan Jalan',
           fontsize=13, fontweight='bold', pad=15)
 plt.ylabel('Aktual', fontsize=12); plt.xlabel('Prediksi', fontsize=12)
 plt.xticks(rotation=30, ha='right')
 plt.tight_layout()
-save_path = os.path.join(OUTPUT_DIR, 'resnet50_finetune_confusion_matrix.png')
+save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_confusion_matrix.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
 plt.show()
 print(f'✅ Confusion matrix tersimpan: {save_path}')
@@ -343,11 +333,11 @@ print('=' * 60)
 report = classification_report(y_true, y_pred, target_names=CLASS_LABELS)
 print(report)
 
-report_path = os.path.join(OUTPUT_DIR, 'resnet50_finetune_classification_report.txt')
+report_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_classification_report.txt')
 with open(report_path, 'w') as f:
-    f.write('Classification Report — ResNet50 Fine-Tuning + Class Weight\n')
-    f.write('Task   : Klasifikasi Kerusakan Jalan\n')
-    f.write('Kelas  : Baik | Sedang | Ringan | Berat\n')
+    f.write('Classification Report — ResNet50 3 Kelas\n')
+    f.write('Task  : Klasifikasi Kerusakan Jalan\n')
+    f.write('Kelas : Sedang | Ringan | Berat\n')
     f.write('='*60 + '\n')
     f.write(report)
     f.write(f'\nTest Accuracy : {test_acc*100:.2f}%')
@@ -359,46 +349,24 @@ print(f'✅ Report tersimpan: {report_path}')
 # ============================================================
 y_bin = label_binarize(y_true, classes=list(range(NUM_CLASSES)))
 plt.figure(figsize=(9, 6))
-colors = cycle(['#2196F3', '#F44336', '#4CAF50', '#FF9800'])
+colors = cycle(['#2196F3', '#F44336', '#4CAF50'])
 for i, (color, cls) in enumerate(zip(colors, CLASS_LABELS)):
     fpr, tpr, _ = roc_curve(y_bin[:, i], y_pred_prob[:, i])
     roc_auc = auc(fpr, tpr)
     plt.plot(fpr, tpr, color=color, linewidth=2,
              label=f'{cls} (AUC = {roc_auc:.2f})')
 plt.plot([0, 1], [0, 1], 'k--', linewidth=1)
-plt.title('ROC Curve — ResNet50 Fine-Tuning\nKlasifikasi Kerusakan Jalan',
+plt.title('ROC Curve — ResNet50 (3 Kelas)\nKlasifikasi Kerusakan Jalan',
           fontsize=13, fontweight='bold')
 plt.xlabel('False Positive Rate', fontsize=12)
 plt.ylabel('True Positive Rate', fontsize=12)
 plt.legend(loc='lower right', fontsize=10)
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
-save_path = os.path.join(OUTPUT_DIR, 'resnet50_finetune_roc_curve.png')
+save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_roc_curve.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
 plt.show()
 print(f'✅ ROC Curve tersimpan: {save_path}')
-
-# ============================================================
-# PRECISION-RECALL CURVE
-# ============================================================
-plt.figure(figsize=(9, 6))
-colors = cycle(['#2196F3', '#F44336', '#4CAF50', '#FF9800'])
-for i, (color, cls) in enumerate(zip(colors, CLASS_LABELS)):
-    precision, recall, _ = precision_recall_curve(y_bin[:, i], y_pred_prob[:, i])
-    pr_auc = auc(recall, precision)
-    plt.plot(recall, precision, color=color, linewidth=2,
-             label=f'{cls} (AUC = {pr_auc:.2f})')
-plt.title('Precision-Recall Curve — ResNet50 Fine-Tuning\nKlasifikasi Kerusakan Jalan',
-          fontsize=13, fontweight='bold')
-plt.xlabel('Recall', fontsize=12)
-plt.ylabel('Precision', fontsize=12)
-plt.legend(loc='lower left', fontsize=10)
-plt.grid(True, alpha=0.3)
-plt.tight_layout()
-save_path = os.path.join(OUTPUT_DIR, 'resnet50_finetune_pr_curve.png')
-plt.savefig(save_path, dpi=150, bbox_inches='tight')
-plt.show()
-print(f'✅ Precision-Recall Curve tersimpan: {save_path}')
 
 # ============================================================
 # GRAFIK PRECISION, RECALL & F1 PER KELAS
@@ -409,7 +377,7 @@ recall_list    = [report_dict[c]['recall']    for c in CLASS_LABELS]
 f1_list        = [report_dict[c]['f1-score']  for c in CLASS_LABELS]
 
 x, width = np.arange(len(CLASS_LABELS)), 0.25
-fig, ax = plt.subplots(figsize=(11, 6))
+fig, ax = plt.subplots(figsize=(10, 6))
 b1 = ax.bar(x - width, precision_list, width, label='Precision', color='#2196F3', edgecolor='black')
 b2 = ax.bar(x,         recall_list,    width, label='Recall',    color='#4CAF50', edgecolor='black')
 b3 = ax.bar(x + width, f1_list,        width, label='F1-Score',  color='#FF5722', edgecolor='black')
@@ -419,12 +387,12 @@ for bars in [b1, b2, b3]:
                 f'{b.get_height():.2f}', ha='center', va='bottom', fontsize=9)
 ax.set_xlabel('Kelas Kerusakan Jalan', fontsize=12)
 ax.set_ylabel('Score', fontsize=12)
-ax.set_title('Precision, Recall & F1-Score per Kelas\nResNet50 Fine-Tuning — Klasifikasi Kerusakan Jalan',
+ax.set_title('Precision, Recall & F1-Score per Kelas\nResNet50 (3 Kelas) — Klasifikasi Kerusakan Jalan',
              fontsize=13, fontweight='bold')
 ax.set_xticks(x); ax.set_xticklabels(CLASS_LABELS)
 ax.set_ylim(0, 1.2); ax.legend(); ax.grid(axis='y', alpha=0.3)
 plt.tight_layout()
-save_path = os.path.join(OUTPUT_DIR, 'resnet50_finetune_per_class_metrics.png')
+save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_per_class_metrics.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
 plt.show()
 print(f'✅ Grafik per kelas tersimpan: {save_path}')
@@ -433,31 +401,23 @@ print(f'✅ Grafik per kelas tersimpan: {save_path}')
 # RINGKASAN AKHIR
 # ============================================================
 print('\n' + '=' * 60)
-print('📋 RINGKASAN HASIL — ResNet50 Fine-Tuning + Class Weight')
+print('📋 RINGKASAN HASIL — ResNet50 3 Kelas')
 print('=' * 60)
 print(f'   Backbone          : ResNet50 pretrained ImageNet')
 print(f'   Strategi          : Fine-tune {FINE_TUNE_LAYERS} layer terakhir')
+print(f'   Kelas             : {CLASS_LABELS}')
 print(f'   Class Weight      : ✅ Aktif')
 print(f'   L2 Regularization : ✅ Aktif (0.0001)')
 print(f'   Input size        : {IMG_SIZE}')
 print(f'   Batch size        : {BATCH_SIZE}')
 print(f'   Optimizer         : Adam (lr={LEARNING_RATE})')
 print(f'   Loss              : Categorical Crossentropy')
-print(f'   Kelas             : {CLASS_LABELS}')
 print(f'   Best Val Accuracy : {best_val_acc*100:.2f}%')
 print(f'   Test Accuracy     : {test_acc*100:.2f}%')
 print(f'   Test Loss         : {test_loss:.4f}')
 print(f'   Epoch berjalan    : {total_epochs} / {EPOCHS}')
-print(f'   Model tersimpan   : {OUTPUT_DIR}/resnet50_finetune_best.h5')
+print(f'   Model tersimpan   : {OUTPUT_DIR}/resnet50_3class_best.h5')
 print('=' * 60)
-print(f'\n📁 Semua output tersimpan di: {OUTPUT_DIR}')
-print('   - resnet50_finetune_best.h5')
-print('   - resnet50_finetune_history.png')
-print('   - resnet50_finetune_confusion_matrix.png')
-print('   - resnet50_finetune_roc_curve.png')
-print('   - resnet50_finetune_pr_curve.png')
-print('   - resnet50_finetune_per_class_metrics.png')
-print('   - resnet50_finetune_classification_report.txt')
 
 if best_val_acc >= 0.80:
     print('\n✅ TARGET TERCAPAI ≥ 80%!')
