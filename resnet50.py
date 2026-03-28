@@ -35,29 +35,41 @@ VAL_DIR    = os.path.join(BASE_DIR, 'dataset', 'val')
 TEST_DIR   = os.path.join(BASE_DIR, 'dataset', 'test')
 OUTPUT_DIR = os.path.join(BASE_DIR, 'dataset', 'output')
 
+# ============================================================
+# OPTIMASI UNTUK 3 KELAS (baik, menengah, berat)
+# ============================================================
+# Strategi: Gabung ringan+sedang → menengah
+# Target: Val Accuracy ≥ 80%
+# Expected: 78-85% (boost dari 70%)
+
 IMG_SIZE         = (224, 224)
 BATCH_SIZE       = 32
-EPOCHS           = 50           # ✅ naik dari 20 → 50
-LEARNING_RATE    = 1e-4
-NUM_CLASSES      = 4
-FINE_TUNE_LAYERS = 20
+EPOCHS           = 100          # ✅ Lebih banyak waktu untuk konvergen
+LEARNING_RATE    = 2e-4         # ✅ Naik dari 1e-4, escape plateau
+NUM_CLASSES      = 3            # ✅ Turun dari 4 → 3 kelas
+FINE_TUNE_LAYERS = 12           # ✅ Turun dari 20 → 12, kurangi overfitting
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-print('\n⚙️  Konfigurasi ResNet50:')
+print('\n⚙️  Konfigurasi ResNet50 (3 KELAS - OPTIMIZED):')
+print(f'   📌 Strategi      : Gabung ringan+sedang → menengah')
 print(f'   Backbone         : ResNet50 pretrained ImageNet')
+print(f'   Kelas            : 3 (baik, menengah, berat)')
 print(f'   IMG_SIZE         : {IMG_SIZE}')
 print(f'   BATCH_SIZE       : {BATCH_SIZE}')
 print(f'   EPOCHS           : {EPOCHS} (maks + EarlyStopping)')
-print(f'   LEARNING_RATE    : {LEARNING_RATE}')
-print(f'   Fine-tune layers : {FINE_TUNE_LAYERS} layer terakhir')
+print(f'   LEARNING_RATE    : {LEARNING_RATE} (↑ dari 1e-4)')
+print(f'   Fine-tune layers : {FINE_TUNE_LAYERS} layer terakhir (↓ dari 20)')
 print(f'   Class weight     : ✅ Aktif')
-print(f'   L2 Regularizer   : ✅ Aktif (0.0001)')
+print(f'   L2 Regularizer   : ✅ Aktif (0.0005, ↑ dari 0.0001)')
+print(f'   Dropout          : 0.6 / 0.4 (↑ dari 0.5 / 0.3)')
+print(f'   Augmentasi       : ✅ Lebih agresif (rotation 30°, zoom 0.3)')
 print(f'   Split data       : 70% train / 20% val / 10% test')
 print(f'   Train dir        : {TRAIN_DIR}')
 print(f'   Val dir          : {VAL_DIR}')
 print(f'   Test dir         : {TEST_DIR}')
 print(f'   Output dir       : {OUTPUT_DIR}')
+print(f'   🎯 Target        : Val Accuracy ≥ 80%')
 
 # ============================================================
 # CEK DISTRIBUSI DATASET
@@ -84,16 +96,19 @@ print(f'\n✅ TOTAL KESELURUHAN : {total_all} gambar')
 # ============================================================
 # AUGMENTASI
 # ============================================================
+# ============================================================
+# AUGMENTASI LEBIH AGRESIF (untuk 3 kelas)
+# ============================================================
 train_datagen = ImageDataGenerator(
     preprocessing_function=preprocess_input,
-    rotation_range=20,
-    width_shift_range=0.1,
-    height_shift_range=0.1,
-    shear_range=0.1,
-    zoom_range=0.2,
+    rotation_range=30,           # ↑ dari 20 → 30
+    width_shift_range=0.15,      # ↑ dari 0.1 → 0.15
+    height_shift_range=0.15,     # ↑ dari 0.1 → 0.15
+    shear_range=0.15,            # ↑ dari 0.1 → 0.15
+    zoom_range=0.3,              # ↑ dari 0.2 → 0.3
     horizontal_flip=True,
     vertical_flip=False,
-    brightness_range=[0.8, 1.2],
+    brightness_range=[0.7, 1.3], # ↑ range dari [0.8,1.2] → [0.7,1.3]
     fill_mode='nearest'
 )
 
@@ -173,16 +188,19 @@ print(f'   Trainable layer  : {trainable_layers} ({FINE_TUNE_LAYERS} terakhir) �
 inputs  = keras.Input(shape=(IMG_SIZE[0], IMG_SIZE[1], 3), name='input_jalan')
 x       = base_model(inputs, training=False)
 x       = layers.GlobalAveragePooling2D(name='gap')(x)
+# ============================================================
+# CLASSIFIER HEAD - STRONGER REGULARIZATION
+# ============================================================
 x       = layers.Dense(512, activation='relu',
-                        kernel_regularizer=keras.regularizers.l2(0.0001),
+                        kernel_regularizer=keras.regularizers.l2(0.0005),  # ↑ dari 0.0001
                         name='fc_512')(x)
 x       = layers.BatchNormalization(name='bn_1')(x)
-x       = layers.Dropout(0.5, name='dropout_1')(x)
+x       = layers.Dropout(0.6, name='dropout_1')(x)  # ↑ dari 0.5 → 0.6
 x       = layers.Dense(256, activation='relu',
-                        kernel_regularizer=keras.regularizers.l2(0.0001),
+                        kernel_regularizer=keras.regularizers.l2(0.0005),  # ↑ dari 0.0001
                         name='fc_256')(x)
 x       = layers.BatchNormalization(name='bn_2')(x)
-x       = layers.Dropout(0.3, name='dropout_2')(x)
+x       = layers.Dropout(0.4, name='dropout_2')(x)  # ↑ dari 0.3 → 0.4
 outputs = layers.Dense(NUM_CLASSES, activation='softmax', name='output')(x)
 
 model = keras.Model(inputs, outputs=outputs, name='ResNet50_FineTune_Jalan')
@@ -209,23 +227,26 @@ print( '   Loss      : Categorical Crossentropy')
 # ============================================================
 # CALLBACKS
 # ============================================================
+# ============================================================
+# CALLBACKS - OPTIMIZED
+# ============================================================
 callbacks = [
     EarlyStopping(
         monitor='val_accuracy',
-        patience=7,
+        patience=10,              # ↑ dari 7 → 10, beri lebih banyak waktu
         restore_best_weights=True,
         verbose=1
     ),
     ModelCheckpoint(
-        os.path.join(OUTPUT_DIR, 'resnet50_best.h5'),
+        os.path.join(OUTPUT_DIR, 'resnet50_3class_best.h5'),  # Rename untuk 3 kelas
         monitor='val_accuracy',
         save_best_only=True,
         verbose=1
     ),
     ReduceLROnPlateau(
         monitor='val_loss',
-        factor=0.3,
-        patience=5,
+        factor=0.5,               # ↑ dari 0.3 → 0.5, less aggressive reduction
+        patience=6,               # ↑ dari 5 → 6
         min_lr=1e-6,
         verbose=1
     )
@@ -235,15 +256,18 @@ callbacks = [
 # TRAINING
 # ============================================================
 print('\n' + '=' * 60)
-print('🚀 TRAINING ResNet50 — Fine-Tune + Class Weight (LINUX)')
-print(f'   Train       : {train_generator.samples} gambar (70%)')
-print(f'   Val         : {val_generator.samples} gambar (20%)')
-print(f'   Test        : {test_generator.samples} gambar (10%)')
-print(f'   Epochs      : maks {EPOCHS} + EarlyStopping (patience=7)')
-print(f'   LR          : {LEARNING_RATE}')
-print(f'   Batch size  : {BATCH_SIZE}')
-print(f'   Fine-tune   : {FINE_TUNE_LAYERS} layer terakhir')
-print( '   Target      : Val Accuracy ≥ 80%')
+print('🚀 TRAINING ResNet50 — 3 KELAS OPTIMIZED (LINUX)')
+print(f'   📌 Strategi  : Gabung ringan+sedang → menengah')
+print(f'   Kelas        : {NUM_CLASSES} (baik, menengah, berat)')
+print(f'   Train        : {train_generator.samples} gambar (70%)')
+print(f'   Val          : {val_generator.samples} gambar (20%)')
+print(f'   Test         : {test_generator.samples} gambar (10%)')
+print(f'   Epochs       : maks {EPOCHS} + EarlyStopping (patience=10)')
+print(f'   LR           : {LEARNING_RATE} (↑ dari 1e-4)')
+print(f'   Batch size   : {BATCH_SIZE}')
+print(f'   Fine-tune    : {FINE_TUNE_LAYERS} layer terakhir (↓ dari 20)')
+print(f'   Regularization: L2=0.0005, Dropout=0.6/0.4')
+print( '   🎯 Target    : Val Accuracy ≥ 80%')
 print('=' * 60)
 
 history = model.fit(
@@ -274,8 +298,8 @@ print(f'{"=" * 60}')
 # VISUALISASI TRAINING HISTORY
 # ============================================================
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-fig.suptitle('ResNet50 Fine-Tuning — Klasifikasi Kerusakan Jalan\n'
-             '(Fine-tune 20 Layer, Input 224×224, Batch 32, LR 1e-4)',
+fig.suptitle('ResNet50 Fine-Tuning — Klasifikasi Kerusakan Jalan (3 KELAS)\n'
+             '(Fine-tune 12 Layer, Input 224×224, Batch 32, LR 2e-4, Dropout 0.6/0.4)',
              fontsize=13, fontweight='bold')
 
 ax1.plot(history.history['accuracy'],     label='Train', color='#2196F3', linewidth=2)
@@ -290,7 +314,7 @@ ax2.set_title('Loss'); ax2.set_xlabel('Epoch'); ax2.set_ylabel('Loss')
 ax2.legend(); ax2.grid(True, alpha=0.3)
 
 plt.tight_layout()
-save_path = os.path.join(OUTPUT_DIR, 'resnet50_history.png')
+save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_history.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
 plt.show()
 print(f'✅ Grafik training tersimpan: {save_path}')
@@ -318,12 +342,12 @@ plt.figure(figsize=(8, 6))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
             xticklabels=CLASS_LABELS, yticklabels=CLASS_LABELS,
             linewidths=0.5, annot_kws={'size': 12})
-plt.title('Confusion Matrix — ResNet50 Fine-Tuning\nKlasifikasi Kerusakan Jalan',
+plt.title('Confusion Matrix — ResNet50 Fine-Tuning (3 KELAS)\nKlasifikasi Kerusakan Jalan',
           fontsize=13, fontweight='bold', pad=15)
 plt.ylabel('Aktual', fontsize=12); plt.xlabel('Prediksi', fontsize=12)
 plt.xticks(rotation=30, ha='right')
 plt.tight_layout()
-save_path = os.path.join(OUTPUT_DIR, 'resnet50_confusion_matrix.png')
+save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_confusion_matrix.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
 plt.show()
 print(f'✅ Confusion matrix tersimpan: {save_path}')
@@ -337,11 +361,12 @@ print('=' * 60)
 report = classification_report(y_true, y_pred, target_names=CLASS_LABELS)
 print(report)
 
-report_path = os.path.join(OUTPUT_DIR, 'resnet50_classification_report.txt')
+report_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_classification_report.txt')
 with open(report_path, 'w') as f:
-    f.write('Classification Report — ResNet50 Fine-Tuning\n')
-    f.write('Task   : Klasifikasi Kerusakan Jalan\n')
-    f.write('Kelas  : Baik | Sedang | Ringan | Berat\n')
+    f.write('Classification Report — ResNet50 Fine-Tuning (3 KELAS)\n')
+    f.write('Task      : Klasifikasi Kerusakan Jalan\n')
+    f.write('Strategi  : Gabung ringan+sedang → menengah\n')
+    f.write('Kelas     : Baik | Menengah | Berat\n')
     f.write('='*60 + '\n')
     f.write(report)
     f.write(f'\nTest Accuracy : {test_acc*100:.2f}%')
@@ -360,14 +385,14 @@ for i, (color, cls) in enumerate(zip(colors, CLASS_LABELS)):
     plt.plot(fpr, tpr, color=color, linewidth=2,
              label=f'{cls} (AUC = {roc_auc:.2f})')
 plt.plot([0, 1], [0, 1], 'k--', linewidth=1)
-plt.title('ROC Curve — ResNet50 Fine-Tuning\nKlasifikasi Kerusakan Jalan',
+plt.title('ROC Curve — ResNet50 Fine-Tuning (3 KELAS)\nKlasifikasi Kerusakan Jalan',
           fontsize=13, fontweight='bold')
 plt.xlabel('False Positive Rate', fontsize=12)
 plt.ylabel('True Positive Rate', fontsize=12)
 plt.legend(loc='lower right', fontsize=10)
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
-save_path = os.path.join(OUTPUT_DIR, 'resnet50_roc_curve.png')
+save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_roc_curve.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
 plt.show()
 print(f'✅ ROC Curve tersimpan: {save_path}')
@@ -382,14 +407,14 @@ for i, (color, cls) in enumerate(zip(colors, CLASS_LABELS)):
     pr_auc = auc(recall, precision)
     plt.plot(recall, precision, color=color, linewidth=2,
              label=f'{cls} (AUC = {pr_auc:.2f})')
-plt.title('Precision-Recall Curve — ResNet50 Fine-Tuning\nKlasifikasi Kerusakan Jalan',
+plt.title('Precision-Recall Curve — ResNet50 Fine-Tuning (3 KELAS)\nKlasifikasi Kerusakan Jalan',
           fontsize=13, fontweight='bold')
 plt.xlabel('Recall', fontsize=12)
 plt.ylabel('Precision', fontsize=12)
 plt.legend(loc='lower left', fontsize=10)
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
-save_path = os.path.join(OUTPUT_DIR, 'resnet50_pr_curve.png')
+save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_pr_curve.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
 plt.show()
 print(f'✅ Precision-Recall Curve tersimpan: {save_path}')
@@ -413,12 +438,12 @@ for bars in [b1, b2, b3]:
                 f'{b.get_height():.2f}', ha='center', va='bottom', fontsize=9)
 ax.set_xlabel('Kelas Kerusakan Jalan', fontsize=12)
 ax.set_ylabel('Score', fontsize=12)
-ax.set_title('Precision, Recall & F1-Score per Kelas\nResNet50 Fine-Tuning — Klasifikasi Kerusakan Jalan',
+ax.set_title('Precision, Recall & F1-Score per Kelas (3 KELAS)\nResNet50 Fine-Tuning — Klasifikasi Kerusakan Jalan',
              fontsize=13, fontweight='bold')
 ax.set_xticks(x); ax.set_xticklabels(CLASS_LABELS)
 ax.set_ylim(0, 1.2); ax.legend(); ax.grid(axis='y', alpha=0.3)
 plt.tight_layout()
-save_path = os.path.join(OUTPUT_DIR, 'resnet50_per_class_metrics.png')
+save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_per_class_metrics.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
 plt.show()
 print(f'✅ Grafik per kelas tersimpan: {save_path}')
@@ -427,22 +452,24 @@ print(f'✅ Grafik per kelas tersimpan: {save_path}')
 # RINGKASAN AKHIR
 # ============================================================
 print('\n' + '=' * 60)
-print('📋 RINGKASAN HASIL — ResNet50 Fine-Tuning (LINUX)')
+print('📋 RINGKASAN HASIL — ResNet50 Fine-Tuning 3 KELAS (LINUX)')
 print('=' * 60)
 print(f'   Backbone          : ResNet50 pretrained ImageNet')
-print(f'   Strategi          : Fine-tune {FINE_TUNE_LAYERS} layer terakhir')
+print(f'   📌 Strategi       : Gabung ringan+sedang → menengah')
+print(f'   Kelas             : {NUM_CLASSES} kelas → {CLASS_LABELS}')
+print(f'   Fine-tune layers  : {FINE_TUNE_LAYERS} layer terakhir (↓ dari 20)')
 print(f'   Class Weight      : ✅ Aktif')
-print(f'   L2 Regularization : ✅ Aktif (0.0001)')
+print(f'   L2 Regularization : ✅ Aktif (0.0005, ↑ dari 0.0001)')
+print(f'   Dropout           : 0.6 / 0.4 (↑ dari 0.5 / 0.3)')
 print(f'   Input size        : {IMG_SIZE}')
 print(f'   Batch size        : {BATCH_SIZE}')
-print(f'   Optimizer         : Adam (lr={LEARNING_RATE})')
+print(f'   Optimizer         : Adam (lr={LEARNING_RATE}, ↑ dari 1e-4)')
 print(f'   Loss              : Categorical Crossentropy')
-print(f'   Kelas             : {CLASS_LABELS}')
 print(f'   Best Val Accuracy : {best_val_acc*100:.2f}%')
 print(f'   Test Accuracy     : {test_acc*100:.2f}%')
 print(f'   Test Loss         : {test_loss:.4f}')
 print(f'   Epoch berjalan    : {total_epochs} / {EPOCHS}')
-print(f'   Model tersimpan   : {OUTPUT_DIR}/resnet50_best.h5')
+print(f'   Model tersimpan   : {OUTPUT_DIR}/resnet50_3class_best.h5')
 print('=' * 60)
 
 if best_val_acc >= 0.80:
