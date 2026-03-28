@@ -29,15 +29,15 @@ print('✅ GPU tersedia       :', tf.config.list_physical_devices('GPU'))
 # ============================================================
 # KONFIGURASI PATH — LINUX
 # ============================================================
-HOME       = os.path.expanduser('~')                      # otomatis ambil home dir
-TRAIN_DIR  = os.path.join(HOME, 'dataset', 'train')      # ~/dataset/train
-VAL_DIR    = os.path.join(HOME, 'dataset', 'val')         # ~/dataset/val
-TEST_DIR   = os.path.join(HOME, 'dataset', 'test')        # ~/dataset/test
-OUTPUT_DIR = os.path.join(HOME, 'dataset', 'output')      # ~/dataset/output
+BASE_DIR   = '/home/echolog/Documents/Project/www/skripsi/ImageClassification-CNN'
+TRAIN_DIR  = os.path.join(BASE_DIR, 'dataset', 'train')
+VAL_DIR    = os.path.join(BASE_DIR, 'dataset', 'val')
+TEST_DIR   = os.path.join(BASE_DIR, 'dataset', 'test')
+OUTPUT_DIR = os.path.join(BASE_DIR, 'dataset', 'output')
 
 IMG_SIZE         = (224, 224)
 BATCH_SIZE       = 32
-EPOCHS           = 50
+EPOCHS           = 50           # ✅ naik dari 20 → 50
 LEARNING_RATE    = 1e-4
 NUM_CLASSES      = 4
 FINE_TUNE_LAYERS = 20
@@ -212,7 +212,7 @@ print( '   Loss      : Categorical Crossentropy')
 callbacks = [
     EarlyStopping(
         monitor='val_accuracy',
-        patience=15,
+        patience=7,
         restore_best_weights=True,
         verbose=1
     ),
@@ -225,7 +225,7 @@ callbacks = [
     ReduceLROnPlateau(
         monitor='val_loss',
         factor=0.3,
-        patience=7,
+        patience=5,
         min_lr=1e-6,
         verbose=1
     )
@@ -239,7 +239,7 @@ print('🚀 TRAINING ResNet50 — Fine-Tune + Class Weight (LINUX)')
 print(f'   Train       : {train_generator.samples} gambar (70%)')
 print(f'   Val         : {val_generator.samples} gambar (20%)')
 print(f'   Test        : {test_generator.samples} gambar (10%)')
-print(f'   Epochs      : maks {EPOCHS} + EarlyStopping (patience=15)')
+print(f'   Epochs      : maks {EPOCHS} + EarlyStopping (patience=7)')
 print(f'   LR          : {LEARNING_RATE}')
 print(f'   Batch size  : {BATCH_SIZE}')
 print(f'   Fine-tune   : {FINE_TUNE_LAYERS} layer terakhir')

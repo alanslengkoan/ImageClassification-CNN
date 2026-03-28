@@ -3,10 +3,11 @@ import os, shutil, random
 # ============================================================
 # KONFIGURASI PATH & KELAS
 # ============================================================
-SOURCE_DIR = '/home/user/dataset_all'        # ✅ ganti sesuai lokasi folder kamu
-TRAIN_DIR  = '/home/user/dataset/train'
-VAL_DIR    = '/home/user/dataset/val'
-TEST_DIR   = '/home/user/dataset/test'
+BASE_DIR   = '/home/echolog/Documents/Project/www/skripsi/ImageClassification-CNN'
+SOURCE_DIR = os.path.join(BASE_DIR, 'dataset_all')
+TRAIN_DIR  = os.path.join(BASE_DIR, 'dataset', 'train')
+VAL_DIR    = os.path.join(BASE_DIR, 'dataset', 'val')
+TEST_DIR   = os.path.join(BASE_DIR, 'dataset', 'test')
 
 CLASSES     = ['baik', 'sedang', 'ringan', 'berat']
 TRAIN_RATIO = 0.7   # 70% train
@@ -128,7 +129,7 @@ print(f'   Test   : {total_test} gambar ({int(TEST_RATIO*100)}%)')
 print(f'   Total  : {total_all} gambar')
 print(f'{"=" * 50}')
 print(f'\n📁 Struktur folder hasil:')
-print(f'   ~/dataset/')
+print(f'   {BASE_DIR}/dataset/')
 print(f'   ├── train/')
 for cls in CLASSES:
     print(f'   │   ├── {cls}/')
