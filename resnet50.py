@@ -47,8 +47,7 @@ BATCH_SIZE       = 32
 EPOCHS           = 150          # ✅ Beri waktu cukup untuk konvergen
 LEARNING_RATE    = 2e-4         # ✅ Terbukti optimal pada v1 (78.84%)
 NUM_CLASSES      = 3            # ✅ 3 kelas: baik, sedang, berat
-FINE_TUNE_LAYERS = 15           # ✅ Naik dari 12 → 15 (capture more features)
-LABEL_SMOOTHING  = 0.1          # ✅ Kurangi overconfidence, generalize lebih baik
+FINE_TUNE_LAYERS = 12           # ✅ Revert ke 12 — terbukti pada val 78.84%
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -64,7 +63,6 @@ print(f'   Fine-tune layers : {FINE_TUNE_LAYERS} layer terakhir')
 print(f'   Class weight     : ✅ Aktif')
 print(f'   L2 Regularizer   : ✅ Aktif (0.0005)')
 print(f'   Dropout          : 0.6 / 0.4 (regularization kuat untuk dataset kecil)')
-print(f'   Label Smoothing  : {LABEL_SMOOTHING} (✅ kurangi overconfidence)')
 print(f'   Augmentasi       : ✅ Lebih agresif (rotation 30°, zoom 0.3)')
 print(f'   Split data       : 70% train / 20% val / 10% test')
 print(f'   Train dir        : {TRAIN_DIR}')
@@ -219,7 +217,7 @@ print(f'   Frozen (dikunci)  : {frozen_params:,}')
 # ============================================================
 model.compile(
     optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
-    loss=tf.keras.losses.CategoricalCrossentropy(label_smoothing=LABEL_SMOOTHING),
+    loss='categorical_crossentropy',
     metrics=['accuracy']
 )
 print(f'\n✅ Model dikompilasi')
@@ -268,7 +266,7 @@ print(f'   Epochs       : maks {EPOCHS} + EarlyStopping (patience=12)')
 print(f'   LR           : {LEARNING_RATE} (terbukti optimal)')
 print(f'   Batch size   : {BATCH_SIZE}')
 print(f'   Fine-tune    : {FINE_TUNE_LAYERS} layer terakhir')
-print(f'   Regularization: L2=0.0005, Dropout=0.6/0.4, LabelSmooth={LABEL_SMOOTHING}')
+print(f'   Regularization: L2=0.0005, Dropout=0.6/0.4')
 print( '   🎯 Target    : Val Accuracy ≥ 80%')
 print('=' * 60)
 
@@ -459,10 +457,9 @@ print('=' * 60)
 print(f'   Backbone          : ResNet50 pretrained ImageNet')
 print(f'   📌 Strategi       : Gabung ringan+sedang → sedang')
 print(f'   Kelas             : {NUM_CLASSES} kelas → {CLASS_LABELS}')
-print(f'   Fine-tune layers  : {FINE_TUNE_LAYERS} layer terakhir (↓ dari 20)')
+print(f'   Fine-tune layers  : 12 layer terakhir (↓ dari 20)')
 print(f'   Class Weight      : ✅ Aktif')
 print(f'   L2 Regularization : ✅ Aktif (0.0005, ↑ dari 0.0001)')
-print(f'   Dropout           : 0.6 / 0.4 (↑ dari 0.5 / 0.3)')
 print(f'   Input size        : {IMG_SIZE}')
 print(f'   Batch size        : {BATCH_SIZE}')
 print(f'   Optimizer         : Adam (lr={LEARNING_RATE}, ↑ dari 1e-4)')

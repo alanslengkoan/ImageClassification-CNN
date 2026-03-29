@@ -10,7 +10,7 @@ VAL_DIR    = os.path.join(BASE_DIR, 'dataset', 'val')
 TEST_DIR   = os.path.join(BASE_DIR, 'dataset', 'test')
 
 # ✅ 3 kelas langsung (ringan sudah digabung ke sedang)
-CLASSES     = ['baik', 'sedang', 'berat']
+CLASSES     = ['baik', 'sedang', 'berat']  # Folder di dataset_all
 TRAIN_RATIO = 0.7   # 70% train
 VAL_RATIO   = 0.2   # 20% val
 TEST_RATIO  = 0.1   # 10% test
@@ -21,17 +21,20 @@ random.seed(42)
 # CEK FOLDER SOURCE
 # ============================================================
 print('📂 Cek folder dataset_all (3 kelas):')
-print('-' * 45)
+print('-' * 50)
 total_source = 0
 semua_ada    = True
+class_counts = {}
+
 for cls in CLASSES:
     path = os.path.join(SOURCE_DIR, cls)
     if os.path.exists(path):
         count = len([f for f in os.listdir(path)
                      if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+        class_counts[cls] = count
         total_source += count
         status = '✅' if count > 0 else '⚠️  kosong!'
-        print(f'   {status} {cls:10s}: {count} gambar')
+        print(f'   {status} {cls:10s}: {count:3d} gambar')
     else:
         print(f'   ❌ {cls:10s}: folder tidak ditemukan!')
         semua_ada = False
@@ -68,14 +71,16 @@ print(f'   ✅ Folder berhasil dibuat: {CLASSES}')
 # BAGI ACAK 70% TRAIN / 20% VAL / 10% TEST
 # ============================================================
 print('\n📊 Membagi dataset secara acak (70% train / 20% val / 10% test)...')
-print('-' * 50)
+print(f'   Kelas: {CLASSES}')
+print('-' * 60)
 
 total_train = 0
 total_val   = 0
 total_test  = 0
 
 for cls in CLASSES:
-    src        = os.path.join(SOURCE_DIR, cls)
+    src = os.path.join(SOURCE_DIR, cls)
+
     all_images = [f for f in os.listdir(src)
                   if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
     random.shuffle(all_images)
@@ -90,16 +95,16 @@ for cls in CLASSES:
     for img in train_imgs:
         shutil.copy(os.path.join(src, img), os.path.join(TRAIN_DIR, cls, img))
     for img in val_imgs:
-        shutil.copy(os.path.join(src, img), os.path.join(VAL_DIR,   cls, img))
+        shutil.copy(os.path.join(src, img), os.path.join(VAL_DIR, cls, img))
     for img in test_imgs:
-        shutil.copy(os.path.join(src, img), os.path.join(TEST_DIR,  cls, img))
+        shutil.copy(os.path.join(src, img), os.path.join(TEST_DIR, cls, img))
 
     total_train += len(train_imgs)
     total_val   += len(val_imgs)
     total_test  += len(test_imgs)
     print(f'   {cls:10s}: {len(train_imgs):3d} train | {len(val_imgs):3d} val | {len(test_imgs):3d} test')
 
-print('-' * 50)
+print('-' * 60)
 print(f'   {"TOTAL":10s}: {total_train:3d} train | {total_val:3d} val | {total_test:3d} test')
 
 # ============================================================
@@ -122,8 +127,8 @@ for split, path in [('TRAIN', TRAIN_DIR), ('VAL', VAL_DIR), ('TEST', TEST_DIR)]:
 # ============================================================
 total_all = total_train + total_val + total_test
 print(f'\n{"=" * 50}')
-print(f'🎉 Dataset berhasil dibagi menjadi 3 kelas!')
-print(f'   Kelas  : {CLASSES}')
+print(f'🎉 Dataset berhasil dibagi menjadi 3 KELAS!')
+print(f'   Kelas    : {CLASSES}')
 print(f'   Train  : {total_train} gambar ({int(TRAIN_RATIO*100)}%)')
 print(f'   Val    : {total_val} gambar ({int(VAL_RATIO*100)}%)')
 print(f'   Test   : {total_test} gambar ({int(TEST_RATIO*100)}%)')
@@ -140,4 +145,4 @@ for cls in CLASSES:
 print(f'   └── test/')
 for cls in CLASSES:
     print(f'       ├── {cls}/')
-print(f'\n➡️  Siap untuk training! Jalankan: python3 resnet50_linux.py')
+print(f'\n➡️  Siap untuk training! Jalankan: python3 resnet50.py')
