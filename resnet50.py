@@ -44,10 +44,11 @@ OUTPUT_DIR = os.path.join(BASE_DIR, 'dataset', 'output')
 
 IMG_SIZE         = (224, 224)
 BATCH_SIZE       = 32
-EPOCHS           = 100          # ✅ Lebih banyak waktu untuk konvergen
-LEARNING_RATE    = 2e-4         # ✅ Naik dari 1e-4, escape plateau
-NUM_CLASSES      = 3            # ✅ Turun dari 4 → 3 kelas
-FINE_TUNE_LAYERS = 12           # ✅ Turun dari 20 → 12, kurangi overfitting
+EPOCHS           = 150          # ✅ Beri waktu cukup untuk konvergen
+LEARNING_RATE    = 2e-4         # ✅ Terbukti optimal pada v1 (78.84%)
+NUM_CLASSES      = 3            # ✅ 3 kelas: baik, sedang, berat
+FINE_TUNE_LAYERS = 15           # ✅ Naik dari 12 → 15 (capture more features)
+LABEL_SMOOTHING  = 0.1          # ✅ Kurangi overconfidence, generalize lebih baik
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -58,11 +59,12 @@ print(f'   Kelas            : 3 (baik, sedang, berat)')
 print(f'   IMG_SIZE         : {IMG_SIZE}')
 print(f'   BATCH_SIZE       : {BATCH_SIZE}')
 print(f'   EPOCHS           : {EPOCHS} (maks + EarlyStopping)')
-print(f'   LEARNING_RATE    : {LEARNING_RATE} (↑ dari 1e-4)')
-print(f'   Fine-tune layers : {FINE_TUNE_LAYERS} layer terakhir (↓ dari 20)')
+print(f'   LEARNING_RATE    : {LEARNING_RATE} (terbukti optimal)')
+print(f'   Fine-tune layers : {FINE_TUNE_LAYERS} layer terakhir')
 print(f'   Class weight     : ✅ Aktif')
-print(f'   L2 Regularizer   : ✅ Aktif (0.0005, ↑ dari 0.0001)')
-print(f'   Dropout          : 0.6 / 0.4 (↑ dari 0.5 / 0.3)')
+print(f'   L2 Regularizer   : ✅ Aktif (0.0005)')
+print(f'   Dropout          : 0.6 / 0.4 (regularization kuat untuk dataset kecil)')
+print(f'   Label Smoothing  : {LABEL_SMOOTHING} (✅ kurangi overconfidence)')
 print(f'   Augmentasi       : ✅ Lebih agresif (rotation 30°, zoom 0.3)')
 print(f'   Split data       : 70% train / 20% val / 10% test')
 print(f'   Train dir        : {TRAIN_DIR}')
@@ -217,7 +219,7 @@ print(f'   Frozen (dikunci)  : {frozen_params:,}')
 # ============================================================
 model.compile(
     optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
-    loss='categorical_crossentropy',
+    loss=tf.keras.losses.CategoricalCrossentropy(label_smoothing=LABEL_SMOOTHING),
     metrics=['accuracy']
 )
 print(f'\n✅ Model dikompilasi')
@@ -233,7 +235,7 @@ print( '   Loss      : Categorical Crossentropy')
 callbacks = [
     EarlyStopping(
         monitor='val_accuracy',
-        patience=10,              # ↑ dari 7 → 10, beri lebih banyak waktu
+        patience=12,              # ✅ Balance: cukup sabar, tidak buang waktu
         restore_best_weights=True,
         verbose=1
     ),
@@ -245,8 +247,8 @@ callbacks = [
     ),
     ReduceLROnPlateau(
         monitor='val_loss',
-        factor=0.5,               # ↑ dari 0.3 → 0.5, less aggressive reduction
-        patience=6,               # ↑ dari 5 → 6
+        factor=0.4,               # ✅ Sedikit lebih responsive
+        patience=7,               # ✅ Balance
         min_lr=1e-6,
         verbose=1
     )
@@ -262,11 +264,11 @@ print(f'   Kelas        : {NUM_CLASSES} (baik, sedang, berat)')
 print(f'   Train        : {train_generator.samples} gambar (70%)')
 print(f'   Val          : {val_generator.samples} gambar (20%)')
 print(f'   Test         : {test_generator.samples} gambar (10%)')
-print(f'   Epochs       : maks {EPOCHS} + EarlyStopping (patience=10)')
-print(f'   LR           : {LEARNING_RATE} (↑ dari 1e-4)')
+print(f'   Epochs       : maks {EPOCHS} + EarlyStopping (patience=12)')
+print(f'   LR           : {LEARNING_RATE} (terbukti optimal)')
 print(f'   Batch size   : {BATCH_SIZE}')
-print(f'   Fine-tune    : {FINE_TUNE_LAYERS} layer terakhir (↓ dari 20)')
-print(f'   Regularization: L2=0.0005, Dropout=0.6/0.4')
+print(f'   Fine-tune    : {FINE_TUNE_LAYERS} layer terakhir')
+print(f'   Regularization: L2=0.0005, Dropout=0.6/0.4, LabelSmooth={LABEL_SMOOTHING}')
 print( '   🎯 Target    : Val Accuracy ≥ 80%')
 print('=' * 60)
 
