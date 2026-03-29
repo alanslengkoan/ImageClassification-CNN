@@ -12,18 +12,18 @@ TEST_DIR   = os.path.join(BASE_DIR, 'dataset', 'test')
 # ============================================================
 # MAPPING 4 KELAS → 3 KELAS
 # ============================================================
-# Strategi: Gabung 'ringan' + 'sedang' → 'menengah'
+# Strategi: Gabung 'ringan' + 'sedang' → 'sedang'
 # Alasan: Kedua kelas overlap tinggi (F1-score rendah)
 # Expected accuracy boost: 70% → 78-85%
 
 CLASSES_SOURCE = ['baik', 'ringan', 'sedang', 'berat']  # Folder di dataset_all
-CLASSES_TARGET = ['baik', 'menengah', 'berat']          # Kelas baru (3 kelas)
+CLASSES_TARGET = ['baik', 'sedang', 'berat']            # Kelas baru (3 kelas)
 
 # Mapping dari source → target
 CLASS_MAPPING = {
     'baik':   'baik',
-    'ringan': 'menengah',  # Gabung ke menengah
-    'sedang': 'menengah',  # Gabung ke menengah
+    'ringan': 'sedang',  # Gabung ke sedang
+    'sedang': 'sedang',  # Tetap sedang
     'berat':  'berat'
 }
 
@@ -93,7 +93,7 @@ print(f'   ✅ Folder berhasil dibuat: {CLASSES_TARGET}')
 # BAGI ACAK 70% TRAIN / 20% VAL / 10% TEST
 # ============================================================
 print('\n📊 Membagi dataset secara acak (70% train / 20% val / 10% test)...')
-print('   Strategi: Gabung ringan+sedang → menengah')
+print('   Strategi: Gabung ringan+sedang → sedang')
 print('-' * 60)
 
 total_train = 0
@@ -118,14 +118,14 @@ for cls_source in CLASSES_SOURCE:
 
     # Copy ke folder target (bukan source!)
     for img in train_imgs:
-        # Rename file untuk avoid collision: baik_001.jpg, ringan_001.jpg → menengah_ringan_001.jpg
-        new_name = f"{cls_source}_{img}" if cls_target == 'menengah' else img
+        # Rename file untuk avoid collision: ringan_001.jpg → sedang_ringan_001.jpg
+        new_name = f"{cls_source}_{img}" if cls_target == 'sedang' and cls_source == 'ringan' else img
         shutil.copy(os.path.join(src, img), os.path.join(TRAIN_DIR, cls_target, new_name))
     for img in val_imgs:
-        new_name = f"{cls_source}_{img}" if cls_target == 'menengah' else img
+        new_name = f"{cls_source}_{img}" if cls_target == 'sedang' and cls_source == 'ringan' else img
         shutil.copy(os.path.join(src, img), os.path.join(VAL_DIR, cls_target, new_name))
     for img in test_imgs:
-        new_name = f"{cls_source}_{img}" if cls_target == 'menengah' else img
+        new_name = f"{cls_source}_{img}" if cls_target == 'sedang' and cls_source == 'ringan' else img
         shutil.copy(os.path.join(src, img), os.path.join(TEST_DIR, cls_target, new_name))
 
     total_train += len(train_imgs)
@@ -157,7 +157,7 @@ for split, path in [('TRAIN', TRAIN_DIR), ('VAL', VAL_DIR), ('TEST', TEST_DIR)]:
 total_all = total_train + total_val + total_test
 print(f'\n{"=" * 60}')
 print(f'🎉 Dataset berhasil dibagi menjadi 3 KELAS!')
-print(f'   Strategi : Gabung ringan+sedang → menengah')
+print(f'   Strategi : Gabung ringan+sedang → sedang')
 print(f'   Kelas    : {CLASSES_TARGET}')
 print(f'   Train    : {total_train} gambar ({int(TRAIN_RATIO*100)}%)')
 print(f'   Val      : {total_val} gambar ({int(VAL_RATIO*100)}%)')

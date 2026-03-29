@@ -36,9 +36,9 @@ TEST_DIR   = os.path.join(BASE_DIR, 'dataset', 'test')
 OUTPUT_DIR = os.path.join(BASE_DIR, 'dataset', 'output')
 
 # ============================================================
-# OPTIMASI UNTUK 3 KELAS (baik, menengah, berat)
+# OPTIMASI UNTUK 3 KELAS (baik, sedang, berat)
 # ============================================================
-# Strategi: Gabung ringan+sedang → menengah
+# Strategi: Gabung ringan+sedang → sedang
 # Target: Val Accuracy ≥ 80%
 # Expected: 78-85% (boost dari 70%)
 
@@ -52,9 +52,9 @@ FINE_TUNE_LAYERS = 12           # ✅ Turun dari 20 → 12, kurangi overfitting
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 print('\n⚙️  Konfigurasi ResNet50 (3 KELAS - OPTIMIZED):')
-print(f'   📌 Strategi      : Gabung ringan+sedang → menengah')
+print(f'   📌 Strategi      : Gabung ringan+sedang → sedang')
 print(f'   Backbone         : ResNet50 pretrained ImageNet')
-print(f'   Kelas            : 3 (baik, menengah, berat)')
+print(f'   Kelas            : 3 (baik, sedang, berat)')
 print(f'   IMG_SIZE         : {IMG_SIZE}')
 print(f'   BATCH_SIZE       : {BATCH_SIZE}')
 print(f'   EPOCHS           : {EPOCHS} (maks + EarlyStopping)')
@@ -257,8 +257,8 @@ callbacks = [
 # ============================================================
 print('\n' + '=' * 60)
 print('🚀 TRAINING ResNet50 — 3 KELAS OPTIMIZED (LINUX)')
-print(f'   📌 Strategi  : Gabung ringan+sedang → menengah')
-print(f'   Kelas        : {NUM_CLASSES} (baik, menengah, berat)')
+print(f'   📌 Strategi  : Gabung ringan+sedang → sedang')
+print(f'   Kelas        : {NUM_CLASSES} (baik, sedang, berat)')
 print(f'   Train        : {train_generator.samples} gambar (70%)')
 print(f'   Val          : {val_generator.samples} gambar (20%)')
 print(f'   Test         : {test_generator.samples} gambar (10%)')
@@ -365,8 +365,8 @@ report_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_classification_report.tx
 with open(report_path, 'w') as f:
     f.write('Classification Report — ResNet50 Fine-Tuning (3 KELAS)\n')
     f.write('Task      : Klasifikasi Kerusakan Jalan\n')
-    f.write('Strategi  : Gabung ringan+sedang → menengah\n')
-    f.write('Kelas     : Baik | Menengah | Berat\n')
+    f.write('Strategi  : Gabung ringan+sedang → sedang\n')
+    f.write('Kelas     : Baik | Sedang | Berat\n')
     f.write('='*60 + '\n')
     f.write(report)
     f.write(f'\nTest Accuracy : {test_acc*100:.2f}%')
@@ -455,7 +455,7 @@ print('\n' + '=' * 60)
 print('📋 RINGKASAN HASIL — ResNet50 Fine-Tuning 3 KELAS (LINUX)')
 print('=' * 60)
 print(f'   Backbone          : ResNet50 pretrained ImageNet')
-print(f'   📌 Strategi       : Gabung ringan+sedang → menengah')
+print(f'   📌 Strategi       : Gabung ringan+sedang → sedang')
 print(f'   Kelas             : {NUM_CLASSES} kelas → {CLASS_LABELS}')
 print(f'   Fine-tune layers  : {FINE_TUNE_LAYERS} layer terakhir (↓ dari 20)')
 print(f'   Class Weight      : ✅ Aktif')
