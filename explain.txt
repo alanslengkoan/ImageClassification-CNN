@@ -2,7 +2,7 @@ spesifikasi:
 - model: resnet50
 - image size: 160x160
 - epochs: 50
-- batch size: 32
+- batch size: 16
 - strategi: Fine-tune 20 layer
 - learning rate: 0.0002
 

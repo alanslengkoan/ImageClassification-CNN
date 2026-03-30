@@ -43,7 +43,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, 'dataset', 'output')
 
 IMG_SIZE         = (224, 224)   # Proven untuk ResNet50 pretrained ImageNet
 BATCH_SIZE       = 32
-EPOCHS           = 50           # Cukup berdasarkan histori (best epoch selalu < 30)
+EPOCHS           = 50           # Fixed: jangan diubah
 LEARNING_RATE    = 2e-4         # Terbukti pada val 78.84%
 NUM_CLASSES      = 3            # 3 kelas: baik, menengah, berat
 FINE_TUNE_LAYERS = 20           # Sesuai reference: lebih banyak layer backbone adapt
@@ -216,7 +216,8 @@ print( '   Loss      : Categorical Crossentropy')
 callbacks = [
     EarlyStopping(
         monitor='val_accuracy',
-        patience=10,
+        # patience=10,
+        patience=15,
         restore_best_weights=True,
         verbose=1
     ),
