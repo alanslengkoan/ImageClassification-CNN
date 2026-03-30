@@ -36,39 +36,33 @@ TEST_DIR   = os.path.join(BASE_DIR, 'dataset', 'test')
 OUTPUT_DIR = os.path.join(BASE_DIR, 'dataset', 'output')
 
 # ============================================================
-# OPTIMASI UNTUK 3 KELAS (baik, sedang, berat)
+# KONFIGURASI 3 KELAS (baik, menengah, berat)
 # ============================================================
-# Strategi: Gabung ringan+sedang → sedang
+# Strategi: Gabung ringan+sedang → menengah
 # Target: Val Accuracy ≥ 80%
-# Expected: 78-85% (boost dari 70%)
 
-IMG_SIZE         = (224, 224)
+IMG_SIZE         = (160, 160)   # Lebih ringan, training lebih cepat
 BATCH_SIZE       = 32
-EPOCHS           = 150          # ✅ Beri waktu cukup untuk konvergen
-LEARNING_RATE    = 2e-4         # ✅ Terbukti optimal pada v1 (78.84%)
-NUM_CLASSES      = 3            # ✅ 3 kelas: baik, sedang, berat
-FINE_TUNE_LAYERS = 12           # ✅ Revert ke 12 — terbukti pada val 78.84%
+EPOCHS           = 50           # Cukup berdasarkan histori (best epoch selalu < 30)
+LEARNING_RATE    = 2e-4         # Terbukti pada val 78.84%
+NUM_CLASSES      = 3            # 3 kelas: baik, menengah, berat
+FINE_TUNE_LAYERS = 12           # Terbukti optimal
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-print('\n⚙️  Konfigurasi ResNet50 (3 KELAS - OPTIMIZED):')
-print(f'   📌 Strategi      : Gabung ringan+sedang → sedang')
+print('\n⚙️  Konfigurasi ResNet50 (3 KELAS):')
+print(f'   📌 Strategi      : Gabung ringan+sedang → menengah')
 print(f'   Backbone         : ResNet50 pretrained ImageNet')
-print(f'   Kelas            : 3 (baik, sedang, berat)')
+print(f'   Kelas            : 3 (baik, menengah, berat)')
 print(f'   IMG_SIZE         : {IMG_SIZE}')
 print(f'   BATCH_SIZE       : {BATCH_SIZE}')
 print(f'   EPOCHS           : {EPOCHS} (maks + EarlyStopping)')
-print(f'   LEARNING_RATE    : {LEARNING_RATE} (terbukti optimal)')
+print(f'   LEARNING_RATE    : {LEARNING_RATE}')
 print(f'   Fine-tune layers : {FINE_TUNE_LAYERS} layer terakhir')
 print(f'   Class weight     : ✅ Aktif')
 print(f'   L2 Regularizer   : ✅ Aktif (0.0005)')
-print(f'   Dropout          : 0.6 / 0.4 (regularization kuat untuk dataset kecil)')
-print(f'   Augmentasi       : ✅ Lebih agresif (rotation 30°, zoom 0.3)')
+print(f'   Dropout          : 0.6 / 0.4')
 print(f'   Split data       : 70% train / 20% val / 10% test')
-print(f'   Train dir        : {TRAIN_DIR}')
-print(f'   Val dir          : {VAL_DIR}')
-print(f'   Test dir         : {TEST_DIR}')
-print(f'   Output dir       : {OUTPUT_DIR}')
 print(f'   🎯 Target        : Val Accuracy ≥ 80%')
 
 # ============================================================
@@ -233,7 +227,7 @@ print( '   Loss      : Categorical Crossentropy')
 callbacks = [
     EarlyStopping(
         monitor='val_accuracy',
-        patience=12,              # ✅ Balance: cukup sabar, tidak buang waktu
+        patience=10,
         restore_best_weights=True,
         verbose=1
     ),
@@ -245,8 +239,8 @@ callbacks = [
     ),
     ReduceLROnPlateau(
         monitor='val_loss',
-        factor=0.4,               # ✅ Sedikit lebih responsive
-        patience=7,               # ✅ Balance
+        factor=0.5,
+        patience=6,
         min_lr=1e-6,
         verbose=1
     )
@@ -256,14 +250,14 @@ callbacks = [
 # TRAINING
 # ============================================================
 print('\n' + '=' * 60)
-print('🚀 TRAINING ResNet50 — 3 KELAS OPTIMIZED (LINUX)')
-print(f'   📌 Strategi  : Gabung ringan+sedang → sedang')
-print(f'   Kelas        : {NUM_CLASSES} (baik, sedang, berat)')
+print('🚀 TRAINING ResNet50 — 3 KELAS (LINUX)')
+print(f'   📌 Strategi  : Gabung ringan+sedang → menengah')
+print(f'   Kelas        : {NUM_CLASSES} (baik, menengah, berat)')
 print(f'   Train        : {train_generator.samples} gambar (70%)')
 print(f'   Val          : {val_generator.samples} gambar (20%)')
 print(f'   Test         : {test_generator.samples} gambar (10%)')
-print(f'   Epochs       : maks {EPOCHS} + EarlyStopping (patience=12)')
-print(f'   LR           : {LEARNING_RATE} (terbukti optimal)')
+print(f'   Epochs       : maks {EPOCHS} + EarlyStopping (patience=10)')
+print(f'   LR           : {LEARNING_RATE}')
 print(f'   Batch size   : {BATCH_SIZE}')
 print(f'   Fine-tune    : {FINE_TUNE_LAYERS} layer terakhir')
 print(f'   Regularization: L2=0.0005, Dropout=0.6/0.4')
@@ -299,7 +293,7 @@ print(f'{"=" * 60}')
 # ============================================================
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 fig.suptitle('ResNet50 Fine-Tuning — Klasifikasi Kerusakan Jalan (3 KELAS)\n'
-             '(Fine-tune 12 Layer, Input 224×224, Batch 32, LR 2e-4, Dropout 0.6/0.4)',
+             f'(Fine-tune {FINE_TUNE_LAYERS} Layer, Input {IMG_SIZE[0]}×{IMG_SIZE[1]}, Batch {BATCH_SIZE}, LR {LEARNING_RATE})',
              fontsize=13, fontweight='bold')
 
 ax1.plot(history.history['accuracy'],     label='Train', color='#2196F3', linewidth=2)
@@ -365,8 +359,8 @@ report_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_classification_report.tx
 with open(report_path, 'w') as f:
     f.write('Classification Report — ResNet50 Fine-Tuning (3 KELAS)\n')
     f.write('Task      : Klasifikasi Kerusakan Jalan\n')
-    f.write('Strategi  : Gabung ringan+sedang → sedang\n')
-    f.write('Kelas     : Baik | Sedang | Berat\n')
+    f.write('Strategi  : Gabung ringan+sedang → menengah\n')
+    f.write('Kelas     : Baik | Menengah | Berat\n')
     f.write('='*60 + '\n')
     f.write(report)
     f.write(f'\nTest Accuracy : {test_acc*100:.2f}%')
@@ -455,14 +449,14 @@ print('\n' + '=' * 60)
 print('📋 RINGKASAN HASIL — ResNet50 Fine-Tuning 3 KELAS (LINUX)')
 print('=' * 60)
 print(f'   Backbone          : ResNet50 pretrained ImageNet')
-print(f'   📌 Strategi       : Gabung ringan+sedang → sedang')
+print(f'   📌 Strategi       : Gabung ringan+sedang → menengah')
 print(f'   Kelas             : {NUM_CLASSES} kelas → {CLASS_LABELS}')
-print(f'   Fine-tune layers  : 12 layer terakhir (↓ dari 20)')
+print(f'   Fine-tune layers  : {FINE_TUNE_LAYERS} layer terakhir')
 print(f'   Class Weight      : ✅ Aktif')
-print(f'   L2 Regularization : ✅ Aktif (0.0005, ↑ dari 0.0001)')
+print(f'   L2 Regularization : ✅ Aktif (0.0005)')
 print(f'   Input size        : {IMG_SIZE}')
 print(f'   Batch size        : {BATCH_SIZE}')
-print(f'   Optimizer         : Adam (lr={LEARNING_RATE}, ↑ dari 1e-4)')
+print(f'   Optimizer         : Adam (lr={LEARNING_RATE})')
 print(f'   Loss              : Categorical Crossentropy')
 print(f'   Best Val Accuracy : {best_val_acc*100:.2f}%')
 print(f'   Test Accuracy     : {test_acc*100:.2f}%')

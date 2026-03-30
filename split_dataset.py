@@ -9,8 +9,20 @@ TRAIN_DIR  = os.path.join(BASE_DIR, 'dataset', 'train')
 VAL_DIR    = os.path.join(BASE_DIR, 'dataset', 'val')
 TEST_DIR   = os.path.join(BASE_DIR, 'dataset', 'test')
 
-# ✅ 3 kelas langsung (ringan sudah digabung ke sedang)
-CLASSES     = ['baik', 'sedang', 'berat']  # Folder di dataset_all
+# ============================================================
+# MAPPING 4 KELAS → 3 KELAS
+# ============================================================
+# Strategi: Gabung 'ringan' + 'sedang' → 'menengah'
+CLASSES_SOURCE = ['baik', 'ringan', 'sedang', 'berat']
+CLASSES_TARGET = ['baik', 'menengah', 'berat']
+
+CLASS_MAPPING = {
+    'baik':   'baik',
+    'ringan': 'menengah',
+    'sedang': 'menengah',
+    'berat':  'berat'
+}
+
 TRAIN_RATIO = 0.7   # 70% train
 VAL_RATIO   = 0.2   # 20% val
 TEST_RATIO  = 0.1   # 10% test
@@ -18,36 +30,42 @@ TEST_RATIO  = 0.1   # 10% test
 random.seed(42)
 
 # ============================================================
-# CEK FOLDER SOURCE
+# CEK FOLDER SOURCE (handle: ringan mungkin tidak ada)
 # ============================================================
-print('📂 Cek folder dataset_all (3 kelas):')
+print('📂 Cek folder dataset_all:')
 print('-' * 50)
+
+# Jika ringan tidak ada tapi sedang punya 600+ gambar, skip ringan
+if not os.path.exists(os.path.join(SOURCE_DIR, 'ringan')):
+    print('   ⚠️  Folder ringan tidak ditemukan — sedang akan dipetakan langsung ke menengah')
+    CLASSES_SOURCE = ['baik', 'sedang', 'berat']
+    CLASS_MAPPING  = {'baik': 'baik', 'sedang': 'menengah', 'berat': 'berat'}
+
 total_source = 0
-semua_ada    = True
 class_counts = {}
 
-for cls in CLASSES:
+for cls in CLASSES_SOURCE:
     path = os.path.join(SOURCE_DIR, cls)
     if os.path.exists(path):
         count = len([f for f in os.listdir(path)
                      if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
         class_counts[cls] = count
         total_source += count
+        target = CLASS_MAPPING[cls]
         status = '✅' if count > 0 else '⚠️  kosong!'
-        print(f'   {status} {cls:10s}: {count:3d} gambar')
+        print(f'   {status} {cls:10s}: {count:3d} gambar → {target}')
     else:
         print(f'   ❌ {cls:10s}: folder tidak ditemukan!')
-        semua_ada = False
+        raise SystemExit(f'Folder {cls} tidak ditemukan di {SOURCE_DIR}')
 
 print(f'\n   {"TOTAL":10s}: {total_source} gambar')
 
-if not semua_ada:
-    print('\n❌ Ada folder yang tidak ditemukan!')
-    print('   Pastikan struktur folder:')
-    print(f'   {SOURCE_DIR}/')
-    for cls in CLASSES:
-        print(f'   ├── {cls}/')
-    raise SystemExit('Hentikan script — perbaiki folder terlebih dahulu.')
+# Auto-balance: cap setiap kelas source ke min per target class
+print(f'\n⚖️  Auto-balance per kelas target:')
+for target_cls in CLASSES_TARGET:
+    srcs = [c for c, t in CLASS_MAPPING.items() if t == target_cls]
+    total = sum(class_counts.get(s, 0) for s in srcs)
+    print(f'   {target_cls:10s}: {total} gambar (dari: {srcs})')
 
 # ============================================================
 # HAPUS FOLDER LAMA, BUAT ULANG
@@ -61,29 +79,34 @@ for path in [TRAIN_DIR, VAL_DIR, TEST_DIR]:
         print(f'   ⚠️  Tidak ada: {path} (skip)')
 
 print('\n📁 Membuat folder train / val / test baru (3 kelas)...')
-for cls in CLASSES:
+for cls in CLASSES_TARGET:
     os.makedirs(os.path.join(TRAIN_DIR, cls), exist_ok=True)
     os.makedirs(os.path.join(VAL_DIR,   cls), exist_ok=True)
     os.makedirs(os.path.join(TEST_DIR,  cls), exist_ok=True)
-print(f'   ✅ Folder berhasil dibuat: {CLASSES}')
+print(f'   ✅ Folder berhasil dibuat: {CLASSES_TARGET}')
 
 # ============================================================
 # BAGI ACAK 70% TRAIN / 20% VAL / 10% TEST
 # ============================================================
 print('\n📊 Membagi dataset secara acak (70% train / 20% val / 10% test)...')
-print(f'   Kelas: {CLASSES}')
+print(f'   Strategi: ringan+sedang → menengah')
 print('-' * 60)
 
 total_train = 0
 total_val   = 0
 total_test  = 0
 
-for cls in CLASSES:
-    src = os.path.join(SOURCE_DIR, cls)
+for cls_source in CLASSES_SOURCE:
+    src        = os.path.join(SOURCE_DIR, cls_source)
+    cls_target = CLASS_MAPPING[cls_source]
 
     all_images = [f for f in os.listdir(src)
                   if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
     random.shuffle(all_images)
+
+    # Cap sedang ke 300 jika tidak ada ringan (untuk balance)
+    if cls_source == 'sedang' and 'ringan' not in CLASSES_SOURCE:
+        all_images = all_images[:300]
 
     n          = len(all_images)
     n_train    = int(n * TRAIN_RATIO)
@@ -92,17 +115,21 @@ for cls in CLASSES:
     val_imgs   = all_images[n_train:n_train + n_val]
     test_imgs  = all_images[n_train + n_val:]
 
+    # Prefix filename jika merge dari sumber berbeda ke menengah
     for img in train_imgs:
-        shutil.copy(os.path.join(src, img), os.path.join(TRAIN_DIR, cls, img))
+        new_name = f"{cls_source}_{img}" if cls_target == 'menengah' else img
+        shutil.copy(os.path.join(src, img), os.path.join(TRAIN_DIR, cls_target, new_name))
     for img in val_imgs:
-        shutil.copy(os.path.join(src, img), os.path.join(VAL_DIR, cls, img))
+        new_name = f"{cls_source}_{img}" if cls_target == 'menengah' else img
+        shutil.copy(os.path.join(src, img), os.path.join(VAL_DIR, cls_target, new_name))
     for img in test_imgs:
-        shutil.copy(os.path.join(src, img), os.path.join(TEST_DIR, cls, img))
+        new_name = f"{cls_source}_{img}" if cls_target == 'menengah' else img
+        shutil.copy(os.path.join(src, img), os.path.join(TEST_DIR, cls_target, new_name))
 
     total_train += len(train_imgs)
     total_val   += len(val_imgs)
     total_test  += len(test_imgs)
-    print(f'   {cls:10s}: {len(train_imgs):3d} train | {len(val_imgs):3d} val | {len(test_imgs):3d} test')
+    print(f'   {cls_source:10s} → {cls_target:10s}: {len(train_imgs):3d} train | {len(val_imgs):3d} val | {len(test_imgs):3d} test')
 
 print('-' * 60)
 print(f'   {"TOTAL":10s}: {total_train:3d} train | {total_val:3d} val | {total_test:3d} test')
@@ -115,7 +142,7 @@ print('-' * 50)
 for split, path in [('TRAIN', TRAIN_DIR), ('VAL', VAL_DIR), ('TEST', TEST_DIR)]:
     print(f'\n📁 {split}:')
     split_total = 0
-    for cls in CLASSES:
+    for cls in CLASSES_TARGET:
         cls_path    = os.path.join(path, cls)
         count       = len(os.listdir(cls_path))
         split_total += count
@@ -128,7 +155,7 @@ for split, path in [('TRAIN', TRAIN_DIR), ('VAL', VAL_DIR), ('TEST', TEST_DIR)]:
 total_all = total_train + total_val + total_test
 print(f'\n{"=" * 50}')
 print(f'🎉 Dataset berhasil dibagi menjadi 3 KELAS!')
-print(f'   Kelas    : {CLASSES}')
+print(f'   Kelas    : {CLASSES_TARGET}')
 print(f'   Train  : {total_train} gambar ({int(TRAIN_RATIO*100)}%)')
 print(f'   Val    : {total_val} gambar ({int(VAL_RATIO*100)}%)')
 print(f'   Test   : {total_test} gambar ({int(TEST_RATIO*100)}%)')
@@ -137,12 +164,12 @@ print(f'{"=" * 50}')
 print(f'\n📁 Struktur folder hasil:')
 print(f'   {BASE_DIR}/dataset/')
 print(f'   ├── train/')
-for cls in CLASSES:
+for cls in CLASSES_TARGET:
     print(f'   │   ├── {cls}/')
 print(f'   ├── val/')
-for cls in CLASSES:
+for cls in CLASSES_TARGET:
     print(f'   │   ├── {cls}/')
 print(f'   └── test/')
-for cls in CLASSES:
+for cls in CLASSES_TARGET:
     print(f'       ├── {cls}/')
 print(f'\n➡️  Siap untuk training! Jalankan: python3 resnet50.py')
