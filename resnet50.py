@@ -41,12 +41,12 @@ OUTPUT_DIR = os.path.join(BASE_DIR, 'dataset', 'output')
 # Strategi: Gabung ringan+sedang → menengah
 # Target: Val Accuracy ≥ 80%
 
-IMG_SIZE         = (160, 160)   # Lebih ringan, training lebih cepat
+IMG_SIZE         = (224, 224)   # Proven untuk ResNet50 pretrained ImageNet
 BATCH_SIZE       = 32
 EPOCHS           = 50           # Cukup berdasarkan histori (best epoch selalu < 30)
 LEARNING_RATE    = 2e-4         # Terbukti pada val 78.84%
 NUM_CLASSES      = 3            # 3 kelas: baik, menengah, berat
-FINE_TUNE_LAYERS = 12           # Terbukti optimal
+FINE_TUNE_LAYERS = 20           # Sesuai reference: lebih banyak layer backbone adapt
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -58,10 +58,9 @@ print(f'   IMG_SIZE         : {IMG_SIZE}')
 print(f'   BATCH_SIZE       : {BATCH_SIZE}')
 print(f'   EPOCHS           : {EPOCHS} (maks + EarlyStopping)')
 print(f'   LEARNING_RATE    : {LEARNING_RATE}')
-print(f'   Fine-tune layers : {FINE_TUNE_LAYERS} layer terakhir')
+print(f'   Fine-tune layers : {FINE_TUNE_LAYERS} layer terakhir ResNet50')
 print(f'   Class weight     : ✅ Aktif')
-print(f'   L2 Regularizer   : ✅ Aktif (0.0005)')
-print(f'   Dropout          : 0.6 / 0.4')
+print(f'   Head             : GAP → BN → Dense(256) → Dropout(0.5) → Softmax')
 print(f'   Split data       : 70% train / 20% val / 10% test')
 print(f'   🎯 Target        : Val Accuracy ≥ 80%')
 
@@ -178,23 +177,13 @@ print(f'   Total layer      : {len(base_model.layers)}')
 print(f'   Frozen layer     : {frozen_layers}')
 print(f'   Trainable layer  : {trainable_layers} ({FINE_TUNE_LAYERS} terakhir) ✅')
 
-# Classifier Head
+# Classifier Head (simplified — sesuai reference)
 inputs  = keras.Input(shape=(IMG_SIZE[0], IMG_SIZE[1], 3), name='input_jalan')
 x       = base_model(inputs, training=False)
 x       = layers.GlobalAveragePooling2D(name='gap')(x)
-# ============================================================
-# CLASSIFIER HEAD - STRONGER REGULARIZATION
-# ============================================================
-x       = layers.Dense(512, activation='relu',
-                        kernel_regularizer=keras.regularizers.l2(0.0005),  # ↑ dari 0.0001
-                        name='fc_512')(x)
 x       = layers.BatchNormalization(name='bn_1')(x)
-x       = layers.Dropout(0.6, name='dropout_1')(x)  # ↑ dari 0.5 → 0.6
-x       = layers.Dense(256, activation='relu',
-                        kernel_regularizer=keras.regularizers.l2(0.0005),  # ↑ dari 0.0001
-                        name='fc_256')(x)
-x       = layers.BatchNormalization(name='bn_2')(x)
-x       = layers.Dropout(0.4, name='dropout_2')(x)  # ↑ dari 0.3 → 0.4
+x       = layers.Dense(256, activation='relu', name='fc_256')(x)
+x       = layers.Dropout(0.5, name='dropout_1')(x)
 outputs = layers.Dense(NUM_CLASSES, activation='softmax', name='output')(x)
 
 model = keras.Model(inputs, outputs=outputs, name='ResNet50_FineTune_Jalan')
@@ -260,7 +249,7 @@ print(f'   Epochs       : maks {EPOCHS} + EarlyStopping (patience=10)')
 print(f'   LR           : {LEARNING_RATE}')
 print(f'   Batch size   : {BATCH_SIZE}')
 print(f'   Fine-tune    : {FINE_TUNE_LAYERS} layer terakhir')
-print(f'   Regularization: L2=0.0005, Dropout=0.6/0.4')
+print(f'   Head: GAP → BN → Dense(256) → Dropout(0.5) → Dense({NUM_CLASSES})')
 print( '   🎯 Target    : Val Accuracy ≥ 80%')
 print('=' * 60)
 
@@ -453,7 +442,7 @@ print(f'   📌 Strategi       : Gabung ringan+sedang → menengah')
 print(f'   Kelas             : {NUM_CLASSES} kelas → {CLASS_LABELS}')
 print(f'   Fine-tune layers  : {FINE_TUNE_LAYERS} layer terakhir')
 print(f'   Class Weight      : ✅ Aktif')
-print(f'   L2 Regularization : ✅ Aktif (0.0005)')
+print(f'   L2 Regularization : ❌ Dihapus (cukup BN + Dropout)')
 print(f'   Input size        : {IMG_SIZE}')
 print(f'   Batch size        : {BATCH_SIZE}')
 print(f'   Optimizer         : Adam (lr={LEARNING_RATE})')

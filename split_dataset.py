@@ -60,12 +60,37 @@ for cls in CLASSES_SOURCE:
 
 print(f'\n   {"TOTAL":10s}: {total_source} gambar')
 
-# Auto-balance: cap setiap kelas source ke min per target class
-print(f'\n⚖️  Auto-balance per kelas target:')
-for target_cls in CLASSES_TARGET:
-    srcs = [c for c, t in CLASS_MAPPING.items() if t == target_cls]
-    total = sum(class_counts.get(s, 0) for s in srcs)
-    print(f'   {target_cls:10s}: {total} gambar (dari: {srcs})')
+# ============================================================
+# PRE-COLLECT & PROPORTIONAL CAP (robust balancing)
+# ============================================================
+print(f'\n🔍 Pre-collect gambar dan hitung cap...')
+source_images_all = {}
+for cls_src in CLASSES_SOURCE:
+    src  = os.path.join(SOURCE_DIR, cls_src)
+    imgs = [f for f in os.listdir(src)
+            if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    random.shuffle(imgs)
+    source_images_all[cls_src] = imgs
+
+# Hitung total per kelas target
+target_totals = {}
+for cls_src, imgs in source_images_all.items():
+    tgt = CLASS_MAPPING[cls_src]
+    target_totals[tgt] = target_totals.get(tgt, 0) + len(imgs)
+
+MAX_PER_TARGET = min(target_totals.values())
+print(f'\n⚖️  Auto-balance (max per target kelas = {MAX_PER_TARGET}):')
+for tgt, total in target_totals.items():
+    indicator = '✅' if total <= MAX_PER_TARGET else f'↓ dari {total}'
+    print(f'   {tgt:10s}: {total:3d} gambar {indicator}')
+
+# Terapkan cap proporsional per source
+for cls_src in CLASSES_SOURCE:
+    tgt              = CLASS_MAPPING[cls_src]
+    total_for_tgt    = target_totals[tgt]
+    proportion       = len(source_images_all[cls_src]) / total_for_tgt
+    cap              = max(1, int(MAX_PER_TARGET * proportion))
+    source_images_all[cls_src] = source_images_all[cls_src][:cap]
 
 # ============================================================
 # HAPUS FOLDER LAMA, BUAT ULANG
@@ -100,13 +125,7 @@ for cls_source in CLASSES_SOURCE:
     src        = os.path.join(SOURCE_DIR, cls_source)
     cls_target = CLASS_MAPPING[cls_source]
 
-    all_images = [f for f in os.listdir(src)
-                  if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-    random.shuffle(all_images)
-
-    # Cap sedang ke 300 jika tidak ada ringan (untuk balance)
-    if cls_source == 'sedang' and 'ringan' not in CLASSES_SOURCE:
-        all_images = all_images[:300]
+    all_images = source_images_all[cls_source]  # Sudah di-cap proporsional
 
     n          = len(all_images)
     n_train    = int(n * TRAIN_RATIO)
