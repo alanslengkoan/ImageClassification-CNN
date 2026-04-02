@@ -36,24 +36,24 @@ TEST_DIR   = os.path.join(BASE_DIR, 'dataset', 'test')
 OUTPUT_DIR = os.path.join(BASE_DIR, 'dataset', 'output')
 
 # ============================================================
-# KONFIGURASI 3 KELAS (baik, menengah, berat)
+# KONFIGURASI 3 KELAS (baik, sedang, berat)
 # ============================================================
-# Strategi: Gabung ringan+sedang → menengah
+# Strategi: Gabung ringan+sedang → sedang
 # Target: Val Accuracy ≥ 80%
 
 IMG_SIZE         = (224, 224)   # Proven untuk ResNet50 pretrained ImageNet
 BATCH_SIZE       = 32
 EPOCHS           = 50           # Fixed: jangan diubah
 LEARNING_RATE    = 2e-4         # Terbukti pada val 78.84%
-NUM_CLASSES      = 3            # 3 kelas: baik, menengah, berat
+NUM_CLASSES      = 3            # 3 kelas: baik, sedang, berat
 FINE_TUNE_LAYERS = 20           # Sesuai reference: lebih banyak layer backbone adapt
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 print('\n⚙️  Konfigurasi ResNet50 (3 KELAS):')
-print(f'   📌 Strategi      : Gabung ringan+sedang → menengah')
+print(f'   📌 Strategi      : Gabung ringan+sedang → sedang')
 print(f'   Backbone         : ResNet50 pretrained ImageNet')
-print(f'   Kelas            : 3 (baik, menengah, berat)')
+print(f'   Kelas            : 3 (baik, sedang, berat)')
 print(f'   IMG_SIZE         : {IMG_SIZE}')
 print(f'   BATCH_SIZE       : {BATCH_SIZE}')
 print(f'   EPOCHS           : {EPOCHS} (maks + EarlyStopping)')
@@ -179,7 +179,7 @@ print(f'   Trainable layer  : {trainable_layers} ({FINE_TUNE_LAYERS} terakhir) �
 
 # Classifier Head (simplified — sesuai reference)
 inputs  = keras.Input(shape=(IMG_SIZE[0], IMG_SIZE[1], 3), name='input_jalan')
-x       = base_model(inputs, training=False)
+x       = base_model(inputs, training=True)   # BN adapt ke domain road damage
 x       = layers.GlobalAveragePooling2D(name='gap')(x)
 x       = layers.BatchNormalization(name='bn_1')(x)
 x       = layers.Dense(256, activation='relu', name='fc_256')(x)
@@ -230,7 +230,7 @@ callbacks = [
     ReduceLROnPlateau(
         monitor='val_loss',
         factor=0.5,
-        patience=6,
+        patience=8,
         min_lr=1e-6,
         verbose=1
     )
@@ -241,8 +241,8 @@ callbacks = [
 # ============================================================
 print('\n' + '=' * 60)
 print('🚀 TRAINING ResNet50 — 3 KELAS (LINUX)')
-print(f'   📌 Strategi  : Gabung ringan+sedang → menengah')
-print(f'   Kelas        : {NUM_CLASSES} (baik, menengah, berat)')
+print(f'   📌 Strategi  : Gabung ringan+sedang → sedang')
+print(f'   Kelas        : {NUM_CLASSES} (baik, sedang, berat)')
 print(f'   Train        : {train_generator.samples} gambar (70%)')
 print(f'   Val          : {val_generator.samples} gambar (20%)')
 print(f'   Test         : {test_generator.samples} gambar (10%)')
@@ -349,8 +349,8 @@ report_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_classification_report.tx
 with open(report_path, 'w') as f:
     f.write('Classification Report — ResNet50 Fine-Tuning (3 KELAS)\n')
     f.write('Task      : Klasifikasi Kerusakan Jalan\n')
-    f.write('Strategi  : Gabung ringan+sedang → menengah\n')
-    f.write('Kelas     : Baik | Menengah | Berat\n')
+    f.write('Strategi  : Gabung ringan+sedang → sedang\n')
+    f.write('Kelas     : Baik | Sedang | Berat\n')
     f.write('='*60 + '\n')
     f.write(report)
     f.write(f'\nTest Accuracy : {test_acc*100:.2f}%')
@@ -439,7 +439,7 @@ print('\n' + '=' * 60)
 print('📋 RINGKASAN HASIL — ResNet50 Fine-Tuning 3 KELAS (LINUX)')
 print('=' * 60)
 print(f'   Backbone          : ResNet50 pretrained ImageNet')
-print(f'   📌 Strategi       : Gabung ringan+sedang → menengah')
+print(f'   📌 Strategi       : Gabung ringan+sedang → sedang')
 print(f'   Kelas             : {NUM_CLASSES} kelas → {CLASS_LABELS}')
 print(f'   Fine-tune layers  : {FINE_TUNE_LAYERS} layer terakhir')
 print(f'   Class Weight      : ✅ Aktif')

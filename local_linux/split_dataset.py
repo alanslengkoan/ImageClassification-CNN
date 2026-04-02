@@ -12,14 +12,14 @@ TEST_DIR   = os.path.join(BASE_DIR, 'dataset', 'test')
 # ============================================================
 # MAPPING 4 KELAS → 3 KELAS
 # ============================================================
-# Strategi: Gabung 'ringan' + 'sedang' → 'menengah'
+# Strategi: Gabung 'ringan' + 'sedang' → 'sedang'
 CLASSES_SOURCE = ['baik', 'ringan', 'sedang', 'berat']
-CLASSES_TARGET = ['baik', 'menengah', 'berat']
+CLASSES_TARGET = ['baik', 'sedang', 'berat']
 
 CLASS_MAPPING = {
     'baik':   'baik',
-    'ringan': 'menengah',
-    'sedang': 'menengah',
+    'ringan': 'sedang',
+    'sedang': 'sedang',
     'berat':  'berat'
 }
 
@@ -37,9 +37,9 @@ print('-' * 50)
 
 # Jika ringan tidak ada tapi sedang punya 600+ gambar, skip ringan
 if not os.path.exists(os.path.join(SOURCE_DIR, 'ringan')):
-    print('   ⚠️  Folder ringan tidak ditemukan — sedang akan dipetakan langsung ke menengah')
+    print('   ⚠️  Folder ringan tidak ditemukan — sedang akan dipetakan langsung ke sedang')
     CLASSES_SOURCE = ['baik', 'sedang', 'berat']
-    CLASS_MAPPING  = {'baik': 'baik', 'sedang': 'menengah', 'berat': 'berat'}
+    CLASS_MAPPING  = {'baik': 'baik', 'sedang': 'sedang', 'berat': 'berat'}
 
 total_source = 0
 class_counts = {}
@@ -78,19 +78,9 @@ for cls_src, imgs in source_images_all.items():
     tgt = CLASS_MAPPING[cls_src]
     target_totals[tgt] = target_totals.get(tgt, 0) + len(imgs)
 
-MAX_PER_TARGET = min(target_totals.values())
-print(f'\n⚖️  Auto-balance (max per target kelas = {MAX_PER_TARGET}):')
+print(f'\n⚖️  Distribusi per kelas target (tanpa cap — class weights handle imbalance):')
 for tgt, total in target_totals.items():
-    indicator = '✅' if total <= MAX_PER_TARGET else f'↓ dari {total}'
-    print(f'   {tgt:10s}: {total:3d} gambar {indicator}')
-
-# Terapkan cap proporsional per source
-for cls_src in CLASSES_SOURCE:
-    tgt              = CLASS_MAPPING[cls_src]
-    total_for_tgt    = target_totals[tgt]
-    proportion       = len(source_images_all[cls_src]) / total_for_tgt
-    cap              = max(1, int(MAX_PER_TARGET * proportion))
-    source_images_all[cls_src] = source_images_all[cls_src][:cap]
+    print(f'   {tgt:10s}: {total:3d} gambar total')
 
 # ============================================================
 # HAPUS FOLDER LAMA, BUAT ULANG
@@ -114,7 +104,7 @@ print(f'   ✅ Folder berhasil dibuat: {CLASSES_TARGET}')
 # BAGI ACAK 70% TRAIN / 20% VAL / 10% TEST
 # ============================================================
 print('\n📊 Membagi dataset secara acak (70% train / 20% val / 10% test)...')
-print(f'   Strategi: ringan+sedang → menengah')
+print(f'   Strategi: ringan+sedang → sedang')
 print('-' * 60)
 
 total_train = 0
@@ -134,15 +124,15 @@ for cls_source in CLASSES_SOURCE:
     val_imgs   = all_images[n_train:n_train + n_val]
     test_imgs  = all_images[n_train + n_val:]
 
-    # Prefix filename jika merge dari sumber berbeda ke menengah
+    # Prefix filename jika merge dari sumber berbeda ke sedang
     for img in train_imgs:
-        new_name = f"{cls_source}_{img}" if cls_target == 'menengah' else img
+        new_name = f"{cls_source}_{img}" if cls_target == 'sedang' else img
         shutil.copy(os.path.join(src, img), os.path.join(TRAIN_DIR, cls_target, new_name))
     for img in val_imgs:
-        new_name = f"{cls_source}_{img}" if cls_target == 'menengah' else img
+        new_name = f"{cls_source}_{img}" if cls_target == 'sedang' else img
         shutil.copy(os.path.join(src, img), os.path.join(VAL_DIR, cls_target, new_name))
     for img in test_imgs:
-        new_name = f"{cls_source}_{img}" if cls_target == 'menengah' else img
+        new_name = f"{cls_source}_{img}" if cls_target == 'sedang' else img
         shutil.copy(os.path.join(src, img), os.path.join(TEST_DIR, cls_target, new_name))
 
     total_train += len(train_imgs)
