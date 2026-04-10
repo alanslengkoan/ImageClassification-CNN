@@ -59,7 +59,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, 'dataset', 'output')
 # ============================================================
 IMG_SIZE         = (224, 224)   # Proven untuk ResNet50 pretrained ImageNet
 BATCH_SIZE       = 16           # [WSL] ↓ 32→16: lebih efisien di CPU
-EPOCHS           = 50           # Fixed: jangan diubah
+EPOCHS           = 70           # [WSL] dinaikkan: batch=16 butuh lebih banyak epoch
 LEARNING_RATE    = 2e-4         # Terbukti pada val 78.84%
 NUM_CLASSES      = 3            # 3 kelas: baik, sedang, berat
 FINE_TUNE_LAYERS = 20           # Sesuai reference: lebih banyak layer backbone adapt
@@ -229,7 +229,7 @@ print( '   Loss      : Categorical Crossentropy')
 callbacks = [
     EarlyStopping(
         monitor='val_accuracy',
-        patience=15,
+        patience=20,          # [WSL] 15→20: batch=16 lebih noisy, butuh waktu lebih
         restore_best_weights=True,
         verbose=1
     ),
@@ -242,7 +242,7 @@ callbacks = [
     ReduceLROnPlateau(
         monitor='val_loss',
         factor=0.5,
-        patience=8,
+        patience=12,          # [WSL] 8→12: hindari LR turun terlalu cepat di batch=16
         min_lr=1e-6,
         verbose=1
     )
