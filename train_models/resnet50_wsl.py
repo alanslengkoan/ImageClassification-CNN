@@ -1,19 +1,19 @@
 import os
 
 # ============================================================
-# OPTIMASI CPU — Intel Core Ultra 5 225H (14 CPUs)
-# WAJIB di-set SEBELUM import TensorFlow
+# [WSL] OPTIMASI CPU — Intel Core Ultra 5 225H (14 CPUs)
+# Harus di-set SEBELUM import TensorFlow
 # ============================================================
-os.environ['TF_ENABLE_ONEDNN_OPTS']   = '1'   # Intel oneDNN acceleration
-os.environ['OMP_NUM_THREADS']          = '10'  # OpenMP threads (P-cores)
-os.environ['TF_NUM_INTRAOP_THREADS']  = '10'  # Operasi dalam satu op
-os.environ['TF_NUM_INTEROP_THREADS']  = '4'   # Operasi antar op (paralel)
-os.environ['TF_CPP_MIN_LOG_LEVEL']    = '2'   # Kurangi log TF yg tidak penting
+os.environ['TF_ENABLE_ONEDNN_OPTS']  = '1'   # Intel oneDNN acceleration
+os.environ['OMP_NUM_THREADS']         = '10'  # OpenMP threads
+os.environ['TF_NUM_INTRAOP_THREADS'] = '10'  # Operasi dalam satu op
+os.environ['TF_NUM_INTEROP_THREADS'] = '4'   # Operasi antar op
+os.environ['TF_CPP_MIN_LOG_LEVEL']   = '2'   # Kurangi log TF
 
 import numpy as np
 import tensorflow as tf
 import matplotlib
-matplotlib.use('Agg')   # WSL: simpan grafik tanpa display window
+matplotlib.use('Agg')   # [WSL] simpan grafik tanpa display window
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -41,17 +41,14 @@ tf.config.threading.set_intra_op_parallelism_threads(10)
 tf.config.threading.set_inter_op_parallelism_threads(4)
 
 print('✅ TensorFlow version :', tf.__version__)
-print('✅ CPU threads        : intra=10, inter=4 (Intel Ultra 5 225H)')
-print('✅ oneDNN Intel       : aktif')
 print('✅ GPU tersedia       :', tf.config.list_physical_devices('GPU'))
+print('✅ [WSL] CPU threads  : intra=10, inter=4 (Intel Core Ultra 5 225H)')
+print('✅ [WSL] oneDNN Intel : aktif')
 
 # ============================================================
 # KONFIGURASI PATH — WSL (Ubuntu on Windows 11)
-# Sesuaikan BASE_DIR dengan lokasi folder di WSL kamu:
-#   Jika dataset ada di C:\ImageClassification-CNN → /mnt/c/ImageClassification-CNN
-#   Jika clone di WSL home                         → /home/<user>/ImageClassification-CNN
 # ============================================================
-BASE_DIR   = '/mnt/d/ImageClassification-CNN/train_models'
+BASE_DIR   = '/mnt/d/ImageClassification-CNN'  # [WSL] Drive D
 TRAIN_DIR  = os.path.join(BASE_DIR, 'dataset', 'train')
 VAL_DIR    = os.path.join(BASE_DIR, 'dataset', 'val')
 TEST_DIR   = os.path.join(BASE_DIR, 'dataset', 'test')
@@ -60,29 +57,23 @@ OUTPUT_DIR = os.path.join(BASE_DIR, 'dataset', 'output')
 # ============================================================
 # KONFIGURASI — DISESUAIKAN UNTUK CPU (WSL)
 # ============================================================
-IMG_SIZE         = (224, 224)
-BATCH_SIZE       = 16           # ↓ 32→16: lebih efisien di CPU, hindari OOM
-EPOCHS           = 50
-LEARNING_RATE    = 2e-4
-NUM_CLASSES      = 3
-FINE_TUNE_LAYERS = 20
-WARMUP_EPOCHS    = 10           # Stage 1: train head saja (backbone frozen)
-LR_HEAD          = 5e-4         # LR lebih tinggi untuk warmup head
+IMG_SIZE         = (224, 224)   # Proven untuk ResNet50 pretrained ImageNet
+BATCH_SIZE       = 16           # [WSL] ↓ 32→16: lebih efisien di CPU
+EPOCHS           = 50           # Fixed: jangan diubah
+LEARNING_RATE    = 2e-4         # Terbukti pada val 78.84%
+NUM_CLASSES      = 3            # 3 kelas: baik, sedang, berat
+FINE_TUNE_LAYERS = 20           # Sesuai reference: lebih banyak layer backbone adapt
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-print('\n⚙️  Konfigurasi ResNet50 (3 KELAS — WSL):')
+print('\n⚙️  Konfigurasi ResNet50 (3 KELAS):')
 print(f'   📌 Strategi      : Gabung ringan+sedang → sedang')
-print(f'   Platform         : WSL Ubuntu / Windows 11 (CPU only)')
-print(f'   Processor        : Intel Core Ultra 5 225H (14 CPUs)')
 print(f'   Backbone         : ResNet50 pretrained ImageNet')
 print(f'   Kelas            : 3 (baik, sedang, berat)')
 print(f'   IMG_SIZE         : {IMG_SIZE}')
-print(f'   BATCH_SIZE       : {BATCH_SIZE} (dikurangi untuk CPU)')
+print(f'   BATCH_SIZE       : {BATCH_SIZE}')
 print(f'   EPOCHS           : {EPOCHS} (maks + EarlyStopping)')
 print(f'   LEARNING_RATE    : {LEARNING_RATE}')
-print(f'   WARMUP_EPOCHS    : {WARMUP_EPOCHS} (Stage 1)')
-print(f'   LR_HEAD          : {LR_HEAD} (Stage 1)')
 print(f'   Fine-tune layers : {FINE_TUNE_LAYERS} layer terakhir ResNet50')
 print(f'   Class weight     : ✅ Aktif')
 print(f'   Head             : GAP → BN → Dense(256) → Dropout(0.5) → Softmax')
@@ -188,16 +179,20 @@ base_model = ResNet50(
     input_shape=(IMG_SIZE[0], IMG_SIZE[1], 3)
 )
 
-base_model.trainable = False   # Stage 1: semua backbone frozen
+base_model.trainable = True
+for layer in base_model.layers[:-FINE_TUNE_LAYERS]:
+    layer.trainable = False
 
+trainable_layers = sum([1 for l in base_model.layers if l.trainable])
+frozen_layers    = sum([1 for l in base_model.layers if not l.trainable])
 print(f'\n📊 ResNet50 Layers:')
 print(f'   Total layer      : {len(base_model.layers)}')
-print(f'   Stage 1          : Semua frozen (warmup head saja)')
-print(f'   Stage 2          : Top {FINE_TUNE_LAYERS} layer akan di-unfreeze')
+print(f'   Frozen layer     : {frozen_layers}')
+print(f'   Trainable layer  : {trainable_layers} ({FINE_TUNE_LAYERS} terakhir) ✅')
 
-# Classifier Head
+# Classifier Head (simplified — sesuai reference)
 inputs  = keras.Input(shape=(IMG_SIZE[0], IMG_SIZE[1], 3), name='input_jalan')
-x       = base_model(inputs, training=False)   # BN pakai stats pre-trained
+x       = base_model(inputs, training=True)   # BN adapt ke domain road damage
 x       = layers.GlobalAveragePooling2D(name='gap')(x)
 x       = layers.BatchNormalization(name='bn_1')(x)
 x       = layers.Dense(256, activation='relu', name='fc_256')(x)
@@ -214,19 +209,22 @@ print(f'   Trainable (aktif) : {trainable_params:,}')
 print(f'   Frozen (dikunci)  : {frozen_params:,}')
 
 # ============================================================
-# COMPILE — Stage 1
+# COMPILE
 # ============================================================
 model.compile(
-    optimizer=tf.keras.optimizers.Adam(learning_rate=LR_HEAD),
+    optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
     loss='categorical_crossentropy',
     metrics=['accuracy']
 )
-print(f'\n✅ Model dikompilasi (Stage 1)')
-print(f'   Optimizer : Adam (lr={LR_HEAD}) — head warmup')
+print(f'\n✅ Model dikompilasi')
+print(f'   Optimizer : Adam (lr={LEARNING_RATE})')
 print( '   Loss      : Categorical Crossentropy')
 
 # ============================================================
-# CALLBACKS (Stage 2)
+# CALLBACKS
+# ============================================================
+# ============================================================
+# CALLBACKS - OPTIMIZED
 # ============================================================
 callbacks = [
     EarlyStopping(
@@ -251,44 +249,24 @@ callbacks = [
 ]
 
 # ============================================================
-# TRAINING — TWO-STAGE
+# TRAINING
 # ============================================================
 print('\n' + '=' * 60)
-print('🚀 TRAINING ResNet50 — TWO-STAGE (WSL / CPU)')
-print(f'   Platform     : Intel Core Ultra 5 225H — CPU only')
-print(f'   Stage 1      : {WARMUP_EPOCHS} epoch, backbone frozen, LR={LR_HEAD}')
-print(f'   Stage 2      : maks {EPOCHS} epoch, top {FINE_TUNE_LAYERS} layers, LR={LEARNING_RATE}')
+print('🚀 TRAINING ResNet50 — 3 KELAS (WSL)')
+print(f'   📌 Strategi  : Gabung ringan+sedang → sedang')
+print(f'   Kelas        : {NUM_CLASSES} (baik, sedang, berat)')
+print(f'   Train        : {train_generator.samples} gambar (70%)')
+print(f'   Val          : {val_generator.samples} gambar (20%)')
+print(f'   Test         : {test_generator.samples} gambar (10%)')
+print(f'   Epochs       : maks {EPOCHS} + EarlyStopping (patience=10)')
+print(f'   LR           : {LEARNING_RATE}')
+print(f'   Batch size   : {BATCH_SIZE}')
+print(f'   Fine-tune    : {FINE_TUNE_LAYERS} layer terakhir')
+print(f'   Head: GAP → BN → Dense(256) → Dropout(0.5) → Dense({NUM_CLASSES})')
 print( '   🎯 Target    : Val Accuracy ≥ 80%')
 print('=' * 60)
 
-# STAGE 1
-print(f'\n🔥 STAGE 1: Training head ({WARMUP_EPOCHS} epoch, backbone frozen)...')
-history1 = model.fit(
-    train_generator,
-    epochs=WARMUP_EPOCHS,
-    validation_data=val_generator,
-    class_weight=class_weights_dict,
-    verbose=1
-)
-
-# Unfreeze top layers untuk Stage 2
-print(f'\n🔓 Unfreeze {FINE_TUNE_LAYERS} layer terakhir untuk Stage 2...')
-base_model.trainable = True
-for layer in base_model.layers[:-FINE_TUNE_LAYERS]:
-    layer.trainable = False
-trainable_s2 = sum([1 for l in base_model.layers if l.trainable])
-print(f'   Backbone trainable layers: {trainable_s2}')
-
-model.compile(
-    optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
-    loss='categorical_crossentropy',
-    metrics=['accuracy']
-)
-print(f'   Recompile: Adam (lr={LEARNING_RATE})')
-
-# STAGE 2
-print(f'\n🔥 STAGE 2: Fine-tune backbone (top {FINE_TUNE_LAYERS} layers)...')
-history2 = model.fit(
+history = model.fit(
     train_generator,
     epochs=EPOCHS,
     validation_data=val_generator,
@@ -297,14 +275,8 @@ history2 = model.fit(
     verbose=1
 )
 
-# Gabung history
-combined_acc      = history1.history['accuracy']     + history2.history['accuracy']
-combined_val_acc  = history1.history['val_accuracy'] + history2.history['val_accuracy']
-combined_loss     = history1.history['loss']         + history2.history['loss']
-combined_val_loss = history1.history['val_loss']     + history2.history['val_loss']
-
-best_val_acc = max(history2.history['val_accuracy'])
-total_epochs = WARMUP_EPOCHS + len(history2.history['accuracy'])
+best_val_acc = max(history.history['val_accuracy'])
+total_epochs = len(history.history['accuracy'])
 
 print(f'\n{"=" * 60}')
 print(f'📊 HASIL TRAINING:')
@@ -323,26 +295,24 @@ print(f'{"=" * 60}')
 # ============================================================
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 fig.suptitle('ResNet50 Fine-Tuning — Klasifikasi Kerusakan Jalan (3 KELAS)\n'
-             f'(Two-Stage, Batch {BATCH_SIZE}, LR {LEARNING_RATE}, WSL/CPU)',
+             f'(Fine-tune {FINE_TUNE_LAYERS} Layer, Input {IMG_SIZE[0]}×{IMG_SIZE[1]}, Batch {BATCH_SIZE}, LR {LEARNING_RATE})',
              fontsize=13, fontweight='bold')
 
-ax1.plot(combined_acc,     label='Train', color='#2196F3', linewidth=2)
-ax1.plot(combined_val_acc, label='Val',   color='#FF5722', linewidth=2, linestyle='--')
+ax1.plot(history.history['accuracy'],     label='Train', color='#2196F3', linewidth=2)
+ax1.plot(history.history['val_accuracy'], label='Val',   color='#FF5722', linewidth=2, linestyle='--')
 ax1.axhline(y=0.80, color='green', linewidth=1.5, linestyle=':', label='Target 80%')
-ax1.axvline(x=WARMUP_EPOCHS, color='gray', linewidth=1.2, linestyle=':', label='Stage 2 start')
 ax1.set_title('Accuracy'); ax1.set_xlabel('Epoch'); ax1.set_ylabel('Accuracy')
 ax1.legend(); ax1.grid(True, alpha=0.3); ax1.set_ylim(0, 1.05)
 
-ax2.plot(combined_loss,     label='Train', color='#2196F3', linewidth=2)
-ax2.plot(combined_val_loss, label='Val',   color='#FF5722', linewidth=2, linestyle='--')
-ax2.axvline(x=WARMUP_EPOCHS, color='gray', linewidth=1.2, linestyle=':')
+ax2.plot(history.history['loss'],     label='Train', color='#2196F3', linewidth=2)
+ax2.plot(history.history['val_loss'], label='Val',   color='#FF5722', linewidth=2, linestyle='--')
 ax2.set_title('Loss'); ax2.set_xlabel('Epoch'); ax2.set_ylabel('Loss')
 ax2.legend(); ax2.grid(True, alpha=0.3)
 
 plt.tight_layout()
 save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_history.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
-plt.close()
+plt.show()
 print(f'✅ Grafik training tersimpan: {save_path}')
 
 # ============================================================
@@ -375,7 +345,7 @@ plt.xticks(rotation=30, ha='right')
 plt.tight_layout()
 save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_confusion_matrix.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
-plt.close()
+plt.show()
 print(f'✅ Confusion matrix tersimpan: {save_path}')
 
 # ============================================================
@@ -421,7 +391,7 @@ plt.grid(True, alpha=0.3)
 plt.tight_layout()
 save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_roc_curve.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
-plt.close()
+plt.show()
 print(f'✅ ROC Curve tersimpan: {save_path}')
 
 # ============================================================
@@ -443,7 +413,7 @@ plt.grid(True, alpha=0.3)
 plt.tight_layout()
 save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_pr_curve.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
-plt.close()
+plt.show()
 print(f'✅ Precision-Recall Curve tersimpan: {save_path}')
 
 # ============================================================
@@ -472,7 +442,7 @@ ax.set_ylim(0, 1.2); ax.legend(); ax.grid(axis='y', alpha=0.3)
 plt.tight_layout()
 save_path = os.path.join(OUTPUT_DIR, 'resnet50_3class_per_class_metrics.png')
 plt.savefig(save_path, dpi=150, bbox_inches='tight')
-plt.close()
+plt.show()
 print(f'✅ Grafik per kelas tersimpan: {save_path}')
 
 # ============================================================
@@ -481,21 +451,20 @@ print(f'✅ Grafik per kelas tersimpan: {save_path}')
 print('\n' + '=' * 60)
 print('📋 RINGKASAN HASIL — ResNet50 Fine-Tuning 3 KELAS (WSL)')
 print('=' * 60)
-print(f'   Platform          : WSL Ubuntu / Windows 11')
-print(f'   Processor         : Intel Core Ultra 5 225H (CPU only)')
 print(f'   Backbone          : ResNet50 pretrained ImageNet')
 print(f'   📌 Strategi       : Gabung ringan+sedang → sedang')
 print(f'   Kelas             : {NUM_CLASSES} kelas → {CLASS_LABELS}')
 print(f'   Fine-tune layers  : {FINE_TUNE_LAYERS} layer terakhir')
 print(f'   Class Weight      : ✅ Aktif')
+print(f'   L2 Regularization : ❌ Dihapus (cukup BN + Dropout)')
 print(f'   Input size        : {IMG_SIZE}')
-print(f'   Batch size        : {BATCH_SIZE} (CPU-optimized)')
+print(f'   Batch size        : {BATCH_SIZE}')
 print(f'   Optimizer         : Adam (lr={LEARNING_RATE})')
 print(f'   Loss              : Categorical Crossentropy')
 print(f'   Best Val Accuracy : {best_val_acc*100:.2f}%')
 print(f'   Test Accuracy     : {test_acc*100:.2f}%')
 print(f'   Test Loss         : {test_loss:.4f}')
-print(f'   Epoch berjalan    : {total_epochs} / {WARMUP_EPOCHS + EPOCHS}')
+print(f'   Epoch berjalan    : {total_epochs} / {EPOCHS}')
 print(f'   Model tersimpan   : {OUTPUT_DIR}/resnet50_3class_best.h5')
 print('=' * 60)
 
