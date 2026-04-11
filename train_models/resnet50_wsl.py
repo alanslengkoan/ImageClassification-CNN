@@ -58,7 +58,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, 'dataset', 'output')
 # KONFIGURASI — DISESUAIKAN UNTUK CPU (WSL)
 # ============================================================
 IMG_SIZE         = (224, 224)   # Proven untuk ResNet50 pretrained ImageNet
-BATCH_SIZE       = 16           # [WSL] ↓ 32→16: lebih efisien di CPU
+BATCH_SIZE       = 32           # [WSL] kembali ke 32: 16GB RAM cukup, batch=16 buat BN noisy
 EPOCHS           = 70           # [WSL] dinaikkan: batch=16 butuh lebih banyak epoch
 LEARNING_RATE    = 2e-4         # Terbukti pada val 78.84%
 NUM_CLASSES      = 3            # 3 kelas: baik, sedang, berat
