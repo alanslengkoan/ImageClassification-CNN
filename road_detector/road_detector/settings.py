@@ -53,5 +53,7 @@ MODEL_PATH = (
     BASE_DIR.parent / 'models' / 'resnet50_3class_best.h5'
 )
 
-# Batas ukuran upload: 10 MB
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+# Batas upload: 100 MB total (untuk multiple files)
+DATA_UPLOAD_MAX_MEMORY_SIZE  = 100 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE  = 10  * 1024 * 1024   # maks 10 MB per file
+MAX_UPLOAD_FILES             = 10                   # maks 10 file sekaligus
