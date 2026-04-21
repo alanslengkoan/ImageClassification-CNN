@@ -454,10 +454,6 @@ print(f'   Test Loss         : {test_loss:.4f}')
 print(f'   Epoch berjalan    : {total_epochs} / {EPOCHS}')
 print(f'   Model tersimpan   : {OUTPUT_DIR}/cnn_baseline_best.h5')
 print('=' * 60)
-print('\n📊 PERBANDINGAN (referensi):')
-print(f'   CNN Baseline      : {test_acc*100:.2f}% (Custom CNN, tanpa pretrained)')
-print(f'   ResNet50 Target   : ≥ 80.00% (Fine-tuning ImageNet)')
-print('=' * 60)
 
 if best_val_acc >= 0.80:
     print('\n✅ CNN Baseline melampaui target 80%!')
@@ -465,4 +461,4 @@ elif best_val_acc >= 0.70:
     print(f'\n🟡 CNN Baseline mendekati target (saat ini {best_val_acc*100:.2f}%)')
 else:
     print(f'\n⚠️  CNN Baseline di bawah target (saat ini {best_val_acc*100:.2f}%)')
-print('   → Ini wajar: ResNet50 pretrained lebih unggul dari CNN from scratch')
+print('\n→ Jalankan compare_models.py untuk melihat perbandingan lengkap dengan ResNet50.')
